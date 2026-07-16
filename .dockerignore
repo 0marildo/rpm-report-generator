@@ -1,0 +1,28 @@
+# Source control and local environments
+.git/
+.agents/
+.codex/
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Secrets and developer-specific configuration
+.env
+.env.*
+!.env.example
+
+# Runtime-generated content and test artifacts
+uploads/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/
+
+# Editor and operating-system metadata
+.DS_Store
+.idea/
+.vscode/

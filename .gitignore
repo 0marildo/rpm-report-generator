@@ -1,0 +1,27 @@
+# Python environments and bytecode
+venv/
+.venv/
+env/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+
+# Secrets: commit only the documented example file
+.env
+.env.*
+!.env.example
+
+# Runtime uploads, generated reports, and local test artifacts
+uploads/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/
+
+# IDE and operating-system files
+.DS_Store
+.idea/
+.vscode/

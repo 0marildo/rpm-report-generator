@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Gerador de Laudos Técnicos de Segurança Contra Incêndio</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #d9383a;
+            --primary-hover: #b82d2f;
+            --primary-light: rgba(217, 56, 58, 0.08);
+            --bg-base: #f4f6f9;
+            --bg-surface: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.08), 0 8px 16px -8px rgba(0,0,0,0.05);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            
+            /* iPhone notch adjustments */
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html {
+            height: -webkit-fill-available;
+        }
+
+        /* App Layout */
+        header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: calc(12px + var(--safe-top)) 24px 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            flex-shrink: 0;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-title h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-title h1 span {
+            color: var(--primary);
+        }
+
+        .header-title p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            cursor: pointer;
+            font-family: inherit;
+            border: none;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(217, 56, 58, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-base);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Main Workspace Container */
+        .app-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Sidebar Navigation & Panels */
+        .sidebar {
+            width: 420px;
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            z-index: 5;
+            transition: var(--transition);
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background-color: #fafbfc;
+            flex-shrink: 0;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 14px 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: transparent;
+            border-bottom: 2px solid transparent;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background-color: var(--bg-surface);
+        }
+
+        .panel-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        /* Custom Scrollbar for Sidebar and Panels */
+        .panel-container::-webkit-scrollbar,
+        .preview-pane::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .panel-container::-webkit-scrollbar-thumb,
+        .preview-pane::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        /* Live Preview Pane */
+        .preview-pane {
+            flex: 1;
+            background-color: #cbd5e1;
+            overflow-y: auto;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .preview-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 8;
+            margin-top: -20px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 30px;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .preview-toolbar-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .preview-scale-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scale-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: white;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .scale-btn:hover {
+            background: var(--bg-base);
+        }
+
+        .scale-value {
+            font-size: 13px;
+            font-weight: 500;
+            min-width: 45px;
+            text-align: center;
+        }
+
+        /* Document Upload Tab Elements */
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: var(--radius-md);
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background-color: #fafbfc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--primary);
+            background-color: var(--primary-light);
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-zone:hover .upload-icon {
+            color: var(--primary);
+            transform: translateY(-2px);
+            transition: var(--transition);
+        }
+
+        .upload-zone h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .upload-zone p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .uploaded-docs-list {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .doc-item {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .doc-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
+        }
+
+        .doc-icon {
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .doc-name {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .doc-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .doc-remove {
+            color: var(--text-muted);
+            padding: 4px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .doc-remove:hover {
+            color: var(--primary);
+            background-color: var(--primary-light);
+        }
+
+        /* Progress indicator */
+        .progress-container {
+            margin-top: 15px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary);
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+
+        .extraction-info {
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            background-color: #fafbfc;
+            border: 1px solid var(--border-color);
+            font-size: 12px;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .extraction-info h4 {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-main);
+        }
+
+        /* Form / Fields Tab Elements */
+        .field-group {
+            margin-bottom: 24px;
+        }
+
+        .field-group-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+
+        .form-control {
+            margin-bottom: 14px;
+        }
+
+        .form-control label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-main);
+        }
+
+        .form-control input, 
+        .form-control textarea {
+            width: 100%;
+            padding: 10px 12px;
+            font-family: inherit;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-surface);
+            color: var(--text-main);
+            transition: var(--transition);
+        }
+
+        .form-control input:focus, 
+        .form-control textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+            outline: none;
+        }
+
+        /* Photo Manager Accordions */
+        .photo-section {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            overflow: hidden;
+            background: var(--bg-surface);
+        }
+
+        .photo-section-header {
+            padding: 12px 16px;
+            background: #fafbfc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .photo-section-header h4 {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .photo-badge {
+            background-color: var(--border-color);
+            color: var(--text-main);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .photo-badge.active {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .photo-section-body {
+            display: none;
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-surface);
+        }
+
+        .photo-section.open .photo-section-body {
+            display: block;
+        }
+
+        .image-uploader-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: var(--radius-sm);
+            padding: 20px 10px;
+            text-align: center;
+            cursor: pointer;
+            background: #fafbfc;
+            transition: var(--transition);
+        }
+
+        .image-uploader-area:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .image-uploader-area p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .image-thumb-container {
+            aspect-ratio: 1;
+            position: relative;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            cursor: grab;
+        }
+
+        .image-thumb-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-thumb-actions {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            display: flex;
+            gap: 2px;
+        }
+
+        .img-action-btn {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .img-action-btn:hover {
+            background: var(--primary);
+        }
+
+        /* Order adjustment buttons */
+        .image-thumb-order {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            display: flex;
+            gap: 2px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 10px;
+            padding: 1px 4px;
+        }
+
+        .order-btn {
+            color: white;
+            font-size: 9px;
+            padding: 1px 3px;
+        }
+
+        .order-btn:hover {
+            color: var(--primary);
+        }
+
+        /* Visual Page Representation in Live Preview */
+        .preview-page-wrapper {
+            background-color: white;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            border-radius: var(--radius-sm);
+            margin-bottom: 30px;
+            position: relative;
+            transform-origin: top center;
+            flex-shrink: 0;
+            overflow: visible;
+        }
+
+        .preview-page {
+            width: 595px; /* A4 Ratio */
+            height: 842px;
+            position: relative;
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            background-color: white;
+        }
+
+        .preview-page-num {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+            background-color: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        /* Text overlay style */
+        .text-overlay {
+            position: absolute;
+            font-family: 'Helvetica', Arial, sans-serif;
+            color: #1e1e1e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+            pointer-events: none;
+        }
+
+        /* Image Placeholder Box Overlay */
+        .image-placeholder-overlay {
+            position: absolute;
+            outline: 1px dashed rgba(217, 56, 58, 0.4);
+            background-color: rgba(217, 56, 58, 0.02);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .image-placeholder-label {
+            font-size: 7px;
+            color: rgba(217, 56, 58, 0.5);
+            text-transform: uppercase;
+            font-weight: bold;
+            pointer-events: none;
+            text-align: center;
+            padding: 4px;
+        }
+
+        /* Placed Image Grid inside Page overlays */
+        .live-image-cell {
+            position: absolute;
+            border: 0.5px solid #a1a1a1;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .live-image-cell img {
+            width: 100%;
+            height: calc(100% - 13px);
+            object-fit: contain;
+            background: white;
+        }
+
+        .live-image-caption {
+            height: 13px;
+            font-size: 6px;
+            color: #222;
+            text-align: center;
+            line-height: 13px;
+            background: #f1f5f9;
+            border-top: 0.5px solid #cbd5e1;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            padding: 0 2px;
+        }
+
+        /* Dynamic Overflow Page Overlay */
+        .overflow-header {
+            position: absolute;
+            left: 35px;
+            top: 55px;
+            font-family: 'Helvetica', Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            color: #262626;
+        }
+
+        /* Floating generation overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-box {
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile Adjustments (Responsive CSS) */
+        @media (max-width: 900px) {
+            body {
+                overflow-y: auto;
+            }
+
+            .app-body {
+                flex-direction: column;
+                overflow: visible;
+                height: auto;
+            }
+
+            header {
+                padding: 10px 16px;
+            }
+
+            .header-title h1 {
+                font-size: 18px;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                height: auto;
+                max-height: 600px;
+            }
+
+            .preview-pane {
+                width: 100%;
+                height: auto;
+                min-height: 600px;
+                padding: 20px 10px;
+            }
+
+            .preview-page-wrapper {
+                margin-bottom: 16px;
+            }
+        }
+        
+        /* Mobile specific iOS Safari optimizations */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                /* Fix for 100vh viewport bug on iOS Safari */
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header bar -->
+    <header>
+        <div class="header-title">
+            <h1><span>CBMERJ</span> Laudo Técnico</h1>
+            <p>Gerador Profissional de Laudo Circunstanciado</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="clear-btn" title="Limpar tudo">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Limpar
+            </button>
+            <button class="btn btn-primary" id="generate-btn">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Gerar PDF Final
+            </button>
+        </div>
+    </header>
+
+    <!-- App Body -->
+    <div class="app-body">
+        
+        <!-- Left panel sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <button class="tab-btn active" data-tab="tab-upload">Upload</button>
+                <button class="tab-btn" data-tab="tab-fields">Dados</button>
+                <button class="tab-btn" data-tab="tab-photos">Fotos</button>
+            </div>
+            
+            <div class="panel-container">
+                
+                <!-- Tab 1: Upload PDFs -->
+                <div class="panel active" id="tab-upload">
+                    <div class="upload-zone" id="pdf-dropzone">
+                        <div class="upload-icon">
+                            <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <h3>Upload de PDF de Referência</h3>
+                        <p>Arraste e solte Laudos de Exigências (LE) ou clique para selecionar</p>
+                        <input type="file" id="pdf-input" multiple accept=".pdf" style="display: none;">
+                    </div>
+                    
+                    <div class="progress-container" id="upload-progress-container">
+                        <div class="progress-bar" id="upload-progress-bar"></div>
+                    </div>
+                    
+                    <div class="extraction-info" id="extraction-status">
+                        <h4 id="status-title">Processando documento...</h4>
+                        <p id="status-desc">Aguarde enquanto extraímos as informações estruturadas com IA.</p>
+                    </div>
+                    
+                    <div class="uploaded-docs-list" id="uploaded-docs">
+                        <!-- Uploaded files will appear here -->
+                    </div>
+                </div>
+                
+                <!-- Tab 2: Extracted Fields Editor -->
+                <div class="panel" id="tab-fields">
+                    <form id="fields-form">
+                        
+                        <div class="field-group">
+                            <div class="field-group-title">Edificação / Cliente</div>
+                            
+                            <div class="form-control">
+                                <label for="input-client_name">Nome do Proprietário / Cliente</label>
+                                <input type="text" id="input-client_name" name="client_name">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-company_name">Empresa / Razão Social</label>
+                                <input type="text" id="input-company_name" name="company_name">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-cnpj">CNPJ / CPF</label>
+                                <input type="text" id="input-cnpj" name="cnpj">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-address">Endereço Completo</label>
+                                <textarea id="input-address" name="address" rows="2"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="field-group">
+                            <div class="field-group-title">Dados do Laudo de Exigências</div>
+                            
+                            <div class="form-control">
+                                <label for="input-process_number">Número do Processo (CBMERJ)</label>
+                                <input type="text" id="input-process_number" name="process_number">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-report_number">Número do Laudo de Exigências (LE)</label>
+                                <input type="text" id="input-report_number" name="report_number">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-classification">Classificação da Edificação</label>
+                                <input type="text" id="input-classification" name="classification">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-floors">Número de Pavimentos</label>
+                                <input type="text" id="input-floors" name="floors">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-building_area">Área Total Construída (m²)</label>
+                                <input type="text" id="input-building_area" name="building_area">
+                            </div>
+                        </div>
+                        
+                        <div class="field-group">
+                            <div class="field-group-title">Responsabilidade Técnica</div>
+                            
+                            <div class="form-control">
+                                <label for="input-engineer">Engenheiro Responsável</label>
+                                <input type="text" id="input-engineer" name="engineer">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-crea">Registro CREA</label>
+                                <input type="text" id="input-crea" name="crea">
+                            </div>
+                        </div>
+
+                        <div class="field-group">
+                            <div class="field-group-title">Sistemas e Riscos</div>
+                            
+                            <div class="form-control">
+                                <label for="input-approved_systems">Sistemas Aprovados</label>
+                                <textarea id="input-approved_systems" name="approved_systems" rows="3"></textarea>
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-specific_risks">Riscos Específicos</label>
+                                <textarea id="input-specific_risks" name="specific_risks" rows="2"></textarea>
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-observations">Observações Gerais</label>
+                                <textarea id="input-observations" name="observations" rows="3"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="field-group">
+                            <div class="field-group-title">Características das Bombas</div>
+                            
+                            <div class="form-control">
+                                <label for="input-fabricante">Fabricante da Bomba</label>
+                                <input type="text" id="input-fabricante" name="fabricante">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-serie">Número de Série</label>
+                                <input type="text" id="input-serie" name="serie">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-modelo">Modelo da Bomba</label>
+                                <input type="text" id="input-modelo" name="modelo">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-vazao_nominal">Vazão Nominal</label>
+                                <input type="text" id="input-vazao_nominal" name="vazao_nominal">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-pressao_nominal">Pressão Nominal</label>
+                                <input type="text" id="input-pressao_nominal" name="pressao_nominal">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-rpm">Rotações por Minuto (RPM)</label>
+                                <input type="text" id="input-rpm" name="rpm">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-diametro_rotor">Diâmetro do Rotor</label>
+                                <input type="text" id="input-diametro_rotor" name="diametro_rotor">
+                            </div>
+                            
+                            <div class="form-control">
+                                <label for="input-potencia_cv">Potência (CV)</label>
+                                <input type="text" id="input-potencia_cv" name="potencia_cv">
+                            </div>
+                        </div>
+                        
+                    </form>
+                </div>
+                
+                <!-- Tab 3: Inspection Photo Manager -->
+                <div class="panel" id="tab-photos">
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Carregue fotos para cada seção do relatório. O layout de fotos se ajusta automaticamente.
+                    </p>
+                    
+                    <div id="photo-sections-container">
+                        <!-- Sections will be injected here by JS -->
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- Right Live Preview panel -->
+        <div class="preview-pane" id="preview-pane">
+            <div class="preview-toolbar">
+                <span class="preview-toolbar-label">Visualização do Relatório</span>
+                <div class="preview-scale-controls">
+                    <button class="scale-btn" id="scale-dec" title="Diminuir zoom">−</button>
+                    <span class="scale-value" id="scale-val">100%</span>
+                    <button class="scale-btn" id="scale-inc" title="Aumentar zoom">+</button>
+                </div>
+            </div>
+            
+            <div id="pages-container" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                <!-- Dynamically compiled preview pages will go here -->
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Generating Modal -->
+    <div class="modal-overlay" id="loading-modal">
+        <div class="modal-box">
+            <div class="spinner"></div>
+            <h3 id="modal-title">Gerando Relatório Técnico</h3>
+            <p id="modal-desc">Compilando campos de dados e organizando as fotos nas páginas...</p>
+        </div>
+    </div>
+
+    <!-- Core Javascript Logic -->
+    <script>
+        // Photo categories configuration matching templates and template_parser rules
+        const PHOTO_CATEGORIES = [
+            { id: "le_print", label: "Laudo de Exigências (Print)" },
+            { id: "fachada", label: "Fachada da Edificação" },
+            { id: "extintor", label: "Extintores" },
+            { id: "hidrante_recalque", label: "Hidrante de Recalque" },
+            { id: "hidrante_urbano", label: "Hidrante Urbano" },
+            { id: "hidrante_caixa", label: "Caixas de Mangueira" },
+            { id: "cmi_exterior", label: "Casa de Máquinas (Exterior)" },
+            { id: "cmi_interior", label: "Casa de Máquinas (Interior)" },
+            { id: "bomba_placa", label: "Identificação / Etiqueta da Bomba" },
+            { id: "curva_bomba", label: "Curva da Bomba" },
+            { id: "alarme", label: "Alarmes de Incêndio" },
+            { id: "sprinkler", label: "Sprinklers" },
+            { id: "sinalizacao", label: "Sinalizações" },
+            { id: "iluminacao_emergencia", label: "Iluminação de Emergência" },
+            { id: "saida_emergencia", label: "Saídas de Emergência" },
+            { id: "risco_especifico", label: "Riscos Específicos (Gerador, Gás, etc.)" },
+            { id: "visao_geral", label: "Visão Geral / Dispositivos" }
+        ];
+
+        // State Store
+        const state = {
+            fields: {},
+            photos: {}, // format: { categoryId: [ { file, dataUrl, name } ] }
+            templateLayout: null,
+            scale: 1.0,
+            activeTab: 'tab-upload'
+        };
+
+        // Initialize state.photos mapping
+        PHOTO_CATEGORIES.forEach(cat => {
+            state.photos[cat.id] = [];
+        });
+
+        // DOM elements
+        const tabs = document.querySelectorAll('.tab-btn');
+        const panels = document.querySelectorAll('.panel');
+        const pdfInput = document.getElementById('pdf-input');
+        const pdfDropzone = document.getElementById('pdf-dropzone');
+        const fieldsForm = document.getElementById('fields-form');
+        const photoSectionsContainer = document.getElementById('photo-sections-container');
+        const pagesContainer = document.getElementById('pages-container');
+        const clearBtn = document.getElementById('clear-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        const loadingModal = document.getElementById('loading-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const uploadProgressBar = document.getElementById('upload-progress-bar');
+        const uploadProgressContainer = document.getElementById('upload-progress-container');
+        const extractionStatus = document.getElementById('extraction-status');
+        const statusTitle = document.getElementById('status-title');
+        const statusDesc = document.getElementById('status-desc');
+        const uploadedDocs = document.getElementById('uploaded-docs');
+        const scaleVal = document.getElementById('scale-val');
+        const scaleInc = document.getElementById('scale-inc');
+        const scaleDec = document.getElementById('scale-dec');
+
+        // Zoom Scale Factor handler
+        function setScale(newScale) {
+            state.scale = Math.min(2.0, Math.max(0.4, newScale));
+            scaleVal.innerText = `${Math.round(state.scale * 100)}%`;
+            updatePreviewStyles();
+        }
+
+        scaleInc.addEventListener('click', () => setScale(state.scale + 0.1));
+        scaleDec.addEventListener('click', () => setScale(state.scale - 0.1));
+
+        // Tab selection handler
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                panels.forEach(p => p.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const targetPanel = document.getElementById(tab.getAttribute('data-tab'));
+                targetPanel.classList.add('active');
+                state.activeTab = tab.getAttribute('data-tab');
+            });
+        });
+
+        // Setup dropzone styles
+        ['dragenter', 'dragover'].forEach(eventName => {
+            pdfDropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                pdfDropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            pdfDropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                pdfDropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        pdfDropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) handlePDFUpload(files);
+        });
+
+        pdfDropzone.addEventListener('click', () => pdfInput.click());
+        pdfInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handlePDFUpload(e.target.files);
+        });
+
+        // Clear State
+        clearBtn.addEventListener('click', () => {
+            if (confirm("Deseja realmente limpar todos os campos e imagens carregadas?")) {
+                fieldsForm.reset();
+                state.fields = {};
+                PHOTO_CATEGORIES.forEach(cat => {
+                    state.photos[cat.id] = [];
+                });
+                uploadedDocs.innerHTML = '';
+                uploadProgressContainer.style.display = 'none';
+                extractionStatus.style.display = 'none';
+                renderPhotoAccordions();
+                updateLivePreview();
+            }
+        });
+
+        // Trigger PDF generation on backend
+        generateBtn.addEventListener('click', async () => {
+            loadingModal.classList.add('active');
+            modalTitle.innerText = "Gerando Relatório Técnico";
+            modalDesc.innerText = "Reunindo dados e compilando o PDF...";
+            
+            try {
+                // Populate current form fields
+                const formData = new FormData();
+                const fieldsObj = {};
+                const inputElements = fieldsForm.querySelectorAll('input, textarea');
+                inputElements.forEach(inp => {
+                    fieldsObj[inp.name] = inp.value;
+                });
+
+                formData.append("extracted_fields", JSON.stringify(fieldsObj));
+                formData.append("template_name", "new_template.pdf");
+                formData.append("output_filename", `relatorio_tecnico_${fieldsObj.process_number || 'cbmerj'}.pdf`);
+
+                // Map category index
+                const categoryMapping = {};
+                let count = 0;
+                for (const [catId, fileList] of Object.entries(state.photos)) {
+                    fileList.forEach((photoObj, idx) => {
+                        // Create a file with a unique, sortable, clean name to guarantee order on backend
+                        const extension = photoObj.file.name.substring(photoObj.file.name.lastIndexOf('.'));
+                        const uniqueName = `${catId}_${idx}${extension}`;
+                        const renamedFile = new File([photoObj.file], uniqueName, { type: photoObj.file.type });
+                        formData.append("images", renamedFile);
+                        categoryMapping[uniqueName] = catId;
+                        count++;
+                    });
+                }
+                formData.append("image_categories", JSON.stringify(categoryMapping));
+
+                const response = await fetch("/api/generate-report", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || "Erro desconhecido na geração");
+                }
+
+                // Download the generated PDF file
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = `laudo_tecnico_${fieldsObj.process_number || 'cbmerj'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                loadingModal.classList.remove('active');
+            } catch (err) {
+                console.error(err);
+                modalTitle.innerText = "Erro na Geração";
+                modalDesc.innerText = `Ocorreu um erro: ${err.message}`;
+                setTimeout(() => {
+                    loadingModal.classList.remove('active');
+                }, 4000);
+            }
+        });
+
+        // Initialize Form Event Listeners to sync live preview as user types
+        fieldsForm.addEventListener('input', () => {
+            const inputElements = fieldsForm.querySelectorAll('input, textarea');
+            inputElements.forEach(inp => {
+                state.fields[inp.name] = inp.value;
+            });
+            updateLivePreview();
+        });
+
+        // Render photo accordions list
+        function renderPhotoAccordions() {
+            photoSectionsContainer.innerHTML = '';
+            
+            PHOTO_CATEGORIES.forEach(cat => {
+                const numPhotos = state.photos[cat.id].length;
+                const secDiv = document.createElement('div');
+                secDiv.className = `photo-section` + (numPhotos > 0 ? ' has-photos' : '');
+                secDiv.id = `sec-${cat.id}`;
+                
+                secDiv.innerHTML = `
+                    <div class="photo-section-header">
+                        <h4>
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            ${cat.label}
+                        </h4>
+                        <span class="photo-badge ${numPhotos > 0 ? 'active' : ''}">${numPhotos}</span>
+                    </div>
+                    <div class="photo-section-body">
+                        <div class="image-uploader-area" data-category="${cat.id}">
+                            <svg style="margin:0 auto 6px auto; color:var(--text-muted);" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <p>Toque ou arraste fotos aqui</p>
+                            <input type="file" multiple accept="image/*" class="photo-file-input" style="display:none;">
+                        </div>
+                        <div class="image-grid" id="grid-${cat.id}"></div>
+                    </div>
+                `;
+                
+                // Toggle accordion logic
+                const header = secDiv.querySelector('.photo-section-header');
+                header.addEventListener('click', () => {
+                    const isOpen = secDiv.classList.contains('open');
+                    // Close all
+                    document.querySelectorAll('.photo-section').forEach(s => s.classList.remove('open'));
+                    if (!isOpen) secDiv.classList.add('open');
+                });
+                
+                // Setup drag/drop/click upload for image uploader area
+                const uploaderArea = secDiv.querySelector('.image-uploader-area');
+                const fileInput = secDiv.querySelector('.photo-file-input');
+                
+                uploaderArea.addEventListener('click', () => fileInput.click());
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length) handleImageUpload(cat.id, e.target.files);
+                });
+                
+                uploaderArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploaderArea.style.borderColor = 'var(--primary)';
+                });
+                uploaderArea.addEventListener('dragleave', () => {
+                    uploaderArea.style.borderColor = '#cbd5e1';
+                });
+                uploaderArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploaderArea.style.borderColor = '#cbd5e1';
+                    if (e.dataTransfer.files.length) handleImageUpload(cat.id, e.dataTransfer.files);
+                });
+                
+                photoSectionsContainer.appendChild(secDiv);
+                renderImageGrid(cat.id);
+            });
+        }
+
+        // Render photo thumbnail grid inside an accordion
+        function renderImageGrid(catId) {
+            const grid = document.getElementById(`grid-${catId}`);
+            if (!grid) return;
+            
+            grid.innerHTML = '';
+            const list = state.photos[catId];
+            
+            list.forEach((photo, idx) => {
+                const item = document.createElement('div');
+                item.className = 'image-thumb-container';
+                item.setAttribute('draggable', true);
+                
+                // Keep tracks of indices
+                item.innerHTML = `
+                    <img src="${photo.dataUrl}" alt="Preview">
+                    <div class="image-thumb-actions">
+                        <button type="button" class="img-action-btn delete-photo" data-idx="${idx}" title="Excluir">×</button>
+                    </div>
+                    <div class="image-thumb-order">
+                        <span class="order-btn move-left" data-idx="${idx}" title="Mover para esquerda">◀</span>
+                        <span class="order-btn move-right" data-idx="${idx}" title="Mover para direita">▶</span>
+                    </div>
+                `;
+                
+                // Add action listeners
+                item.querySelector('.delete-photo').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeImage(catId, idx);
+                });
+                
+                item.querySelector('.move-left').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveImage(catId, idx, idx - 1);
+                });
+                
+                item.querySelector('.move-right').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    moveImage(catId, idx, idx + 1);
+                });
+                
+                // Drag and drop sorting handlers
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', idx);
+                    e.dataTransfer.effectAllowed = 'move';
+                    item.style.opacity = '0.5';
+                });
+                
+                item.addEventListener('dragend', () => {
+                    item.style.opacity = '1';
+                });
+                
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    if (!isNaN(fromIdx) && fromIdx !== idx) {
+                        moveImage(catId, fromIdx, idx);
+                    }
+                });
+                
+                grid.appendChild(item);
+            });
+            
+            // Update counts in header badge
+            const badge = document.querySelector(`#sec-${catId} .photo-badge`);
+            if (badge) {
+                badge.innerText = list.length;
+                if (list.length > 0) {
+                    badge.classList.add('active');
+                    document.getElementById(`sec-${catId}`).classList.add('has-photos');
+                } else {
+                    badge.classList.remove('active');
+                    document.getElementById(`sec-${catId}`).classList.remove('has-photos');
+                }
+            }
+        }
+
+        // Upload and process PDF LE document
+        async function handlePDFUpload(files) {
+            uploadProgressContainer.style.display = 'block';
+            uploadProgressBar.style.width = '20%';
+            extractionStatus.style.display = 'block';
+            statusTitle.innerText = "Enviando arquivo...";
+            statusDesc.innerText = "Carregando PDF de referência no servidor.";
+            
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append("files", files[i]);
+            }
+            
+            try {
+                uploadProgressBar.style.width = '40%';
+                statusTitle.innerText = "Extraindo campos com IA...";
+                statusDesc.innerText = "O agente inteligente está analisando a estrutura do Laudo de Exigências.";
+                
+                const response = await fetch("/api/extract", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                uploadProgressBar.style.width = '80%';
+                
+                if (!response.ok) {
+                    const errRes = await response.json();
+                    throw new Error(errRes.error || "Erro de extração");
+                }
+                
+                const result = await response.json();
+                
+                uploadProgressBar.style.width = '100%';
+                statusTitle.innerText = "Extração concluída!";
+                statusDesc.innerText = `Métodos utilizados: ${result.extractionMethods.join(', ')}`;
+                
+                // Populate forms
+                if (result.success && result.extractedFields) {
+                    const fields = result.extractedFields;
+                    
+                    // Update form values
+                    for (const [key, val] of Object.entries(fields)) {
+                        const inputEl = document.getElementById(`input-${key}`);
+                        if (inputEl) {
+                            inputEl.value = val;
+                            state.fields[key] = val;
+                        }
+                    }
+                    
+                    // Render UI indicators for uploaded documents
+                    for (let i = 0; i < files.length; i++) {
+                        const docDiv = document.createElement('div');
+                        docDiv.className = 'doc-item';
+                        docDiv.innerHTML = `
+                            <div class="doc-info">
+                                <span class="doc-icon">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </span>
+                                <div>
+                                    <div class="doc-name">${files[i].name}</div>
+                                    <div class="doc-meta">${(files[i].size / 1024).toFixed(0)} KB • IA Extração</div>
+                                </div>
+                            </div>
+                        `;
+                        uploadedDocs.appendChild(docDiv);
+                    }
+                    
+                    // Automatically redirect to the Fields Tab so user can check
+                    setTimeout(() => {
+                        tabs[1].click();
+                        uploadProgressContainer.style.display = 'none';
+                        extractionStatus.style.display = 'none';
+                    }, 2000);
+                    
+                    updateLivePreview();
+                }
+            } catch (err) {
+                console.error(err);
+                uploadProgressBar.style.width = '100%';
+                statusTitle.innerText = "Erro no processamento";
+                statusDesc.innerText = err.message;
+            }
+        }
+
+        // Upload and process image file
+        function handleImageUpload(catId, files) {
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    state.photos[catId].push({
+                        file: file,
+                        dataUrl: e.target.result,
+                        name: file.name
+                    });
+                    
+                    renderImageGrid(catId);
+                    updateLivePreview();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Remove image from collection
+        function removeImage(catId, idx) {
+            state.photos[catId].splice(idx, 1);
+            renderImageGrid(catId);
+            updateLivePreview();
+        }
+
+        // Move image inside list
+        function moveImage(catId, fromIdx, toIdx) {
+            const list = state.photos[catId];
+            if (toIdx < 0 || toIdx >= list.length) return;
+            
+            const targetItem = list[fromIdx];
+            list.splice(fromIdx, 1);
+            list.splice(toIdx, 0, targetItem);
+            
+            renderImageGrid(catId);
+            updateLivePreview();
+        }
+
+        // Fetch template coordinate structure
+        async function fetchTemplateLayout() {
+            try {
+                const response = await fetch("/api/template-layout");
+                if (response.ok) {
+                    state.templateLayout = await response.json();
+                    initializeLivePreview();
+                }
+            } catch (e) {
+                console.error("Failed to load template layout coordinates", e);
+            }
+        }
+
+        // Initial setup of layout preview pages list
+        function initializeLivePreview() {
+            if (!state.templateLayout || !state.templateLayout.success) return;
+            
+            pagesContainer.innerHTML = '';
+            const pageCount = state.templateLayout.page_count;
+            
+            for (let i = 0; i < pageCount; i++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'preview-page-wrapper';
+                wrapper.id = `page-wrapper-${i}`;
+                
+                const innerPage = document.createElement('div');
+                innerPage.className = 'preview-page';
+                innerPage.id = `page-${i}`;
+                innerPage.style.backgroundImage = `url('/static/template_pages/page_${i}.png')`;
+                
+                const pageNum = document.createElement('div');
+                pageNum.className = 'preview-page-num';
+                pageNum.innerText = `Página ${i + 1}`;
+                
+                innerPage.appendChild(pageNum);
+                wrapper.appendChild(innerPage);
+                pagesContainer.appendChild(wrapper);
+            }
+            
+            updateLivePreview();
+        }
+
+        // Calculate visual image layouts based on ImageLayoutEngine specifications
+        function layoutImagesInJS(images, placeholder, startIdx) {
+            const placed = [];
+            const areaW = placeholder.area_x1 - placeholder.area_x0;
+            const areaH = placeholder.area_bottom - placeholder.area_top;
+            
+            const PADDING = 8.0;
+            const CAPTION_RESERVE = 13.0; // 8 font + 3 gap + 2 line
+            const MAX_CELL_WIDTH = 225.0;  // 43% of 525 pt printable width
+            const MAX_CELL_HEIGHT = 450.0; // ~160 mm in points
+            
+            const n = images.length;
+            if (n === 0) return { placed: [], overflowPages: [] };
+            
+            const cols = n > 1 ? 2 : 1;
+            const rows = Math.ceil(n / cols);
+            
+            // Get max fit count for the template slot
+            const maxSlotCount = getMaxImagesInArea(areaW, areaH, n, PADDING, CAPTION_RESERVE, 80);
+            const slotCount = Math.min(n, maxSlotCount);
+            
+            const slotCols = slotCount > 1 ? 2 : 1;
+            const slotRows = Math.ceil(slotCount / slotCols);
+            
+            const baseCellW = (areaW - (slotCols + 1) * PADDING) / slotCols;
+            const cellW = Math.min(MAX_CELL_WIDTH, baseCellW);
+            
+            const rowH = (areaH - (slotRows + 1) * PADDING) / slotRows;
+            const imgH = Math.min(MAX_CELL_HEIGHT, rowH - CAPTION_RESERVE);
+            
+            for (let i = 0; i < slotCount; i++) {
+                const r = Math.floor(i / slotCols);
+                const c = i % slotCols;
+                const rowStart = r * slotCols;
+                const rowEnd = Math.min(rowStart + slotCols, slotCount);
+                const imgsInRow = rowEnd - rowStart;
+                
+                const totalRowW = imgsInRow * cellW + (imgsInRow - 1) * PADDING;
+                const startX = placeholder.area_x0 + (areaW - totalRowW) / 2;
+                const x0 = startX + c * (cellW + PADDING);
+                
+                let y0 = placeholder.area_top + PADDING + r * (rowH + PADDING);
+                const actualRowReserve = rowH - CAPTION_RESERVE;
+                if (imgH < actualRowReserve) {
+                    y0 += (actualRowReserve - imgH) / 2;
+                }
+                
+                placed.push({
+                    x0, y0, w: cellW, h: imgH,
+                    dataUrl: images[i].dataUrl,
+                    caption: `Figura ${startIdx + i} – ${placeholder.category.replace(/_/g, ' ')}.`
+                });
+            }
+            
+            // Handle Overflow Pages
+            const remaining = images.slice(slotCount);
+            const overflowPages = [];
+            let currentIdx = startIdx + slotCount;
+            
+            const usableW_O = 525.0; // 595 - 70 margins
+            const titleH = 22.0; // 14 size + 8 gap
+            const usableH_O = 710.0; // 842 - 110 margins - 22 title
+            
+            while (remaining.length > 0) {
+                const maxO = getMaxImagesInArea(usableW_O, usableH_O, remaining.length, PADDING, CAPTION_RESERVE, 80);
+                const batchCount = Math.min(remaining.length, maxO);
+                const batch = remaining.splice(0, batchCount);
+                
+                const colsO = batchCount > 1 ? 2 : 1;
+                const rowsO = Math.ceil(batchCount / colsO);
+                
+                const baseCellWO = (usableW_O - (colsO + 1) * PADDING) / colsO;
+                const cellWO = Math.min(MAX_CELL_WIDTH, baseCellWO);
+                
+                const rowHO = (usableH_O - (rowsO + 1) * PADDING) / rowsO;
+                const imgHO = Math.min(MAX_CELL_HEIGHT, rowHO - CAPTION_RESERVE);
+                
+                const pagePlaced = [];
+                for (let i = 0; i < batchCount; i++) {
+                    const r = Math.floor(i / colsO);
+                    const c = i % colsO;
+                    const rowStart = r * colsO;
+                    const rowEnd = Math.min(rowStart + colsO, batchCount);
+                    const imgsInRow = rowEnd - rowStart;
+                    
+                    const totalRowW = imgsInRow * cellWO + (imgsInRow - 1) * PADDING;
+                    const startX = 35.0 + (usableW_O - totalRowW) / 2;
+                    const x0 = startX + c * (cellWO + PADDING);
+                    
+                    let y0 = 55.0 + titleH + PADDING + r * (rowHO + PADDING);
+                    const actualRowReserve = rowHO - CAPTION_RESERVE;
+                    if (imgHO < actualRowReserve) {
+                        y0 += (actualRowReserve - imgHO) / 2;
+                    }
+                    
+                    pagePlaced.push({
+                        x0, y0, w: cellWO, h: imgHO,
+                        dataUrl: batch[i].dataUrl,
+                        caption: `Figura ${currentIdx} – ${placeholder.category.replace(/_/g, ' ')}.`
+                    });
+                    currentIdx++;
+                }
+                
+                overflowPages.push(pagePlaced);
+            }
+            
+            return { placed, overflowPages };
+        }
+
+        // Get max row capacities in area
+        function getMaxImagesInArea(width, height, count, padding, captionReserve, minCellH) {
+            for (let tryN = count; tryN > 0; tryN--) {
+                const cols = tryN > 1 ? 2 : 1;
+                const rows = Math.ceil(tryN / cols);
+                const rowH = (height - (rows + 1) * padding) / rows;
+                if (rowH >= minCellH) {
+                    return tryN;
+                }
+            }
+            return 1;
+        }
+
+        // Live preview elements re-renderer
+        function updateLivePreview() {
+            if (!state.templateLayout) return;
+            
+            // 1. Clear dynamically created elements (overlays and overflow pages)
+            document.querySelectorAll('.text-overlay, .image-placeholder-overlay, .live-image-cell, .overflow-header').forEach(el => el.remove());
+            document.querySelectorAll('.preview-page-wrapper.overflow-page').forEach(el => el.remove());
+            
+            // 2. Map form text fields to template-native keys
+            const aliasMap = {
+                "company_name": "proprietario",
+                "client_name": "proprietario",
+                "cnpj": "cnpj",
+                "address": "endereco",
+                "classification": "classificacao",
+                "floors": "num_pavimentos",
+                "building_area": "area_total",
+                "process_number": "processo",
+                "report_number": "laudo_exigencias",
+                "fabricante": "fabricante",
+                "serie": "serie",
+                "modelo": "modelo",
+                "vazao_nominal": "vazao_nominal",
+                "pressao_nominal": "pressao_nominal",
+                "rpm": "rpm",
+                "diametro_rotor": "diametro_rotor",
+                "potencia_cv": "potencia_cv"
+            };
+
+            const resolvedFields = {};
+            // Direct fields first
+            for (const [k, v] of Object.entries(state.fields)) {
+                if (v && v.trim() !== '') {
+                    resolvedFields[k] = v.trim();
+                }
+            }
+            // Overlay with mapped aliases
+            for (const [aliasK, templateK] of Object.entries(aliasMap)) {
+                if (state.fields[aliasK] && state.fields[aliasK].trim() !== '') {
+                    if (templateK === 'proprietario') {
+                        const comp = (state.fields['company_name'] || '').trim();
+                        const client = (state.fields['client_name'] || '').trim();
+                        if (client && comp) {
+                            resolvedFields[templateK] = `${client} / ${comp}`;
+                        } else {
+                            resolvedFields[templateK] = client || comp;
+                        }
+                    } else {
+                        resolvedFields[templateK] = state.fields[aliasK].trim();
+                    }
+                }
+            }
+            
+            // 3. Render Text Overlays
+            const textFieldsDef = state.templateLayout.text_fields;
+            for (const [key, fd] of Object.entries(textFieldsDef)) {
+                const textVal = resolvedFields[key] || '';
+                const pageEl = document.getElementById(`page-${fd.page}`);
+                if (!pageEl) continue;
+                
+                const overlay = document.createElement('div');
+                overlay.className = 'text-overlay';
+                overlay.innerText = textVal;
+                overlay.style.left = `${fd.value_x}px`;
+                overlay.style.top = `${(fd.value_top + fd.value_bottom) / 2 - fd.font_size / 2}px`;
+                overlay.style.fontSize = `${fd.font_size}px`;
+                overlay.style.maxWidth = `${fd.max_width}px`;
+                overlay.style.fontWeight = 'bold';
+                
+                pageEl.appendChild(overlay);
+            }
+            
+            // 4. Render and Layout uploaded photographs
+            let figIndex = 1;
+            const overflowPagesByPage = {}; // maps template page -> array of overflow lists
+            
+            const placeholdersDef = state.templateLayout.image_placeholders;
+            
+            // Process in category alphabetical order to keep consistent figure numbering
+            const sortedCategories = Object.keys(placeholdersDef).sort();
+            
+            sortedCategories.forEach(catId => {
+                const phList = placeholdersDef[catId];
+                if (!phList || phList.length === 0) return;
+                
+                const uploaded = state.photos[catId] || [];
+                
+                // Fetch template slot placeholder
+                let slotPh = null;
+                for (const ph of phList) {
+                    const h = ph.area_bottom - ph.area_top;
+                    if (h >= 80) {
+                        slotPh = ph;
+                        break;
+                    }
+                }
+                if (!slotPh && phList.length > 0) slotPh = phList[0];
+                
+                if (uploaded.length === 0) {
+                    // Draw visual placeholder dashed boxes in layout if empty
+                    phList.forEach(ph => {
+                        const pageEl = document.getElementById(`page-${ph.page}`);
+                        if (pageEl) {
+                            const dummy = document.createElement('div');
+                            dummy.className = 'image-placeholder-overlay';
+                            dummy.style.left = `${ph.area_x0}px`;
+                            dummy.style.top = `${ph.area_top}px`;
+                            dummy.style.width = `${ph.area_x1 - ph.area_x0}px`;
+                            dummy.style.height = `${ph.area_bottom - ph.area_top}px`;
+                            dummy.innerHTML = `<span class="image-placeholder-label">${ph.insert_text}</span>`;
+                            pageEl.appendChild(dummy);
+                        }
+                    });
+                    return;
+                }
+                
+                // Do the layout arrangement
+                const layoutResult = layoutImagesInJS(uploaded, slotPh, figIndex);
+                figIndex += uploaded.length;
+                
+                // Place images in slot
+                const pageEl = document.getElementById(`page-${slotPh.page}`);
+                if (pageEl) {
+                    layoutResult.placed.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'live-image-cell';
+                        cellDiv.style.left = `${cell.x0}px`;
+                        cellDiv.style.top = `${cell.y0}px`;
+                        cellDiv.style.width = `${cell.w}px`;
+                        cellDiv.style.height = `${cell.h + 13}px`; // image height + caption height
+                        cellDiv.innerHTML = `
+                            <img src="${cell.dataUrl}">
+                            <div class="live-image-caption">${cell.caption}</div>
+                        `;
+                        pageEl.appendChild(cellDiv);
+                    });
+                }
+                
+                // Track overflow pages to insert them after slot page
+                if (layoutResult.overflowPages.length > 0) {
+                    if (!overflowPagesByPage[slotPh.page]) {
+                        overflowPagesByPage[slotPh.page] = [];
+                    }
+                    overflowPagesByPage[slotPh.page].push({
+                        categoryName: PHOTO_CATEGORIES.find(c => c.id === catId)?.label.toUpperCase() || catId.toUpperCase(),
+                        pages: layoutResult.overflowPages
+                    });
+                }
+            });
+            
+            // 5. Inject Overflow Pages dynamically in order
+            const templatePageKeys = Object.keys(overflowPagesByPage).map(Number).sort((a,b) => b - a); // reverse sort to prevent index shifting on insertions
+            
+            templatePageKeys.forEach(tplPageIdx => {
+                const sectionOverflows = overflowPagesByPage[tplPageIdx];
+                const targetWrapper = document.getElementById(`page-wrapper-${tplPageIdx}`);
+                if (!targetWrapper) return;
+                
+                let nextNode = targetWrapper.nextSibling;
+                
+                sectionOverflows.forEach(secOf => {
+                    secOf.pages.forEach((pageGroup, overflowIdx) => {
+                        const overflowWrapper = document.createElement('div');
+                        overflowWrapper.className = 'preview-page-wrapper overflow-page';
+                        
+                        const overflowPage = document.createElement('div');
+                        overflowPage.className = 'preview-page';
+                        overflowPage.style.backgroundColor = '#ffffff';
+                        overflowPage.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.05)';
+                        
+                        const titleEl = document.createElement('div');
+                        titleEl.className = 'overflow-header';
+                        titleEl.innerText = `${secOf.categoryName} (CONT.)`;
+                        overflowPage.appendChild(titleEl);
+                        
+                        const pageNum = document.createElement('div');
+                        pageNum.className = 'preview-page-num';
+                        pageNum.innerText = `Página Adicional (Overflow)`;
+                        overflowPage.appendChild(pageNum);
+                        
+                        // Populate group images
+                        pageGroup.forEach(cell => {
+                            const cellDiv = document.createElement('div');
+                            cellDiv.className = 'live-image-cell';
+                            cellDiv.style.left = `${cell.x0}px`;
+                            cellDiv.style.top = `${cell.y0}px`;
+                            cellDiv.style.width = `${cell.w}px`;
+                            cellDiv.style.height = `${cell.h + 13}px`;
+                            cellDiv.innerHTML = `
+                                <img src="${cell.dataUrl}">
+                                <div class="live-image-caption">${cell.caption}</div>
+                            `;
+                            overflowPage.appendChild(cellDiv);
+                        });
+                        
+                        overflowWrapper.appendChild(overflowPage);
+                        
+                        // Insert after the current page wrapper
+                        if (nextNode) {
+                            pagesContainer.insertBefore(overflowWrapper, nextNode);
+                        } else {
+                            pagesContainer.appendChild(overflowWrapper);
+                        }
+                    });
+                });
+            });
+            
+            updatePreviewStyles();
+        }
+
+        // Apply scale styles dynamically on size change
+        function updatePreviewStyles() {
+            document.querySelectorAll('.preview-page-wrapper').forEach(wrapper => {
+                const inner = wrapper.querySelector('.preview-page');
+                inner.style.transform = `scale(${state.scale})`;
+                wrapper.style.width = `${595 * state.scale}px`;
+                wrapper.style.height = `${842 * state.scale}px`;
+            });
+        }
+
+        // Load coordinate layout map and bootstrap UI
+        window.addEventListener('load', () => {
+            renderPhotoAccordions();
+            fetchTemplateLayout();
+        });
+        
+        // Window Resize recalculator
+        window.addEventListener('resize', () => {
+            // Adaptive auto zoom scaling on mobile screens
+            if (window.innerWidth <= 900) {
+                const autoScale = (window.innerWidth - 30) / 595;
+                setScale(autoScale);
+            }
+        });
+    </script>
+</body>
+</html>

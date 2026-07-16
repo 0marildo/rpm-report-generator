@@ -1,0 +1,188 @@
+"""Cursor-based deterministic report layout.
+
+The template supplies section anchors, never image bounding boxes.  Content is
+measured first, then paginated, then rendered from the resulting plan.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import logging
+
+import fitz
+
+from .image_layout_engine import GridLayout, ImageLayoutEngine
+from .page_renderer import PageRenderer
+from .table_renderer import TableRenderer
+from .template_parser import ImagePlaceholderDef, TemplateDef, parse_template
+from .text_renderer import TextRenderer
+
+logger = logging.getLogger(__name__)
+
+PAGE_W = 595.0
+PAGE_H = 842.0
+MARGIN_L = 35.0
+MARGIN_R = 35.0
+MARGIN_T = 55.0
+MARGIN_B = 55.0
+SECTION_GAP = 8.0
+CONTINUATION_TEMPLATE_PAGE = 10
+CONTINUATION_CURSOR_Y = MARGIN_T + 26.0
+
+
+@dataclass(frozen=True)
+class SectionAnchor:
+    category: str
+    page: int
+    cursor_y: float
+    next_anchor_y: float | None
+
+
+class SectionAnalyzer:
+    """Converts template placeholders into flow anchors and safe page bounds."""
+
+    def __init__(self, template: TemplateDef):
+        self.template = template
+
+    def anchors(self) -> list[SectionAnchor]:
+        raw: list[ImagePlaceholderDef] = [
+            placeholder
+            for placeholders in self.template.image_placeholders.values()
+            for placeholder in placeholders
+        ]
+        # Multiple template markers for one category still represent one section.
+        first_by_category: dict[str, ImagePlaceholderDef] = {}
+        for placeholder in sorted(raw, key=lambda p: (p.page, p.insert_rect[1])):
+            first_by_category.setdefault(placeholder.category, placeholder)
+        ordered = sorted(first_by_category.values(), key=lambda p: (p.page, p.insert_rect[1]))
+        result: list[SectionAnchor] = []
+        for index, placeholder in enumerate(ordered):
+            next_y = None
+            if index + 1 < len(ordered) and ordered[index + 1].page == placeholder.page:
+                next_y = ordered[index + 1].insert_rect[1] - SECTION_GAP
+            # Only the insertion text baseline is used.  area_* dimensions are
+            # intentionally ignored by the flow engine.
+            result.append(SectionAnchor(placeholder.category, placeholder.page, placeholder.insert_rect[1], next_y))
+        return result
+
+
+class LayoutEngine:
+    """Coordinates template cleaning, flow layout, pagination and rendering."""
+
+    def __init__(self, template_path: str):
+        self.template_path = template_path
+        self.image_layout_engine = ImageLayoutEngine()
+        self.text_renderer = TextRenderer()
+        self.table_renderer = TableRenderer()
+        self.page_renderer = PageRenderer()
+        self.tpl = parse_template(template_path)
+
+    def layout_document(self, doc: fitz.Document, fields: dict[str, str], image_sections: dict[str, list[dict]]) -> None:
+        self._fill_form_fields(doc, fields)
+        self._clear_placeholders(doc)
+        self._layout_photos(doc, image_sections)
+
+    def _fill_form_fields(self, doc: fitz.Document, fields: dict[str, str]) -> None:
+        aliases = {"company_name": "proprietario", "client_name": "proprietario", "address": "endereco", "classification": "classificacao", "floors": "num_pavimentos", "building_area": "area_total", "process_number": "processo", "report_number": "laudo_exigencias"}
+        resolved = {key: str(value).strip() for key, value in fields.items() if value is not None and str(value).strip()}
+        for source, target in aliases.items():
+            if source in resolved:
+                if target == "proprietario":
+                    names = [resolved[key] for key in ("client_name", "company_name") if key in resolved]
+                    resolved[target] = " / ".join(names)
+                else:
+                    resolved[target] = resolved[source]
+        for name, value in resolved.items():
+            field = self.tpl.text_fields.get(name)
+            if field and field.page < doc.page_count:
+                self.table_renderer.fill_table_cells(doc[field.page], {name: value}, self.tpl.text_fields)
+
+    def _clear_placeholders(self, doc: fitz.Document) -> None:
+        for placeholders in self.tpl.image_placeholders.values():
+            for placeholder in placeholders:
+                if placeholder.page >= doc.page_count:
+                    continue
+                page = doc[placeholder.page]
+                # Clear only template sample content.  Its dimensions are never
+                # passed to the layout solver.
+                page.draw_rect(fitz.Rect(placeholder.insert_rect), color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                page.draw_rect(fitz.Rect(0, placeholder.insert_rect[1], PAGE_W, PAGE_H - MARGIN_B), color=(1, 1, 1), fill=(1, 1, 1), width=0)
+
+    def _layout_photos(self, doc: fitz.Document, image_sections: dict[str, list[dict]]) -> None:
+        anchors = SectionAnalyzer(self.tpl).anchors()
+        known = {anchor.category for anchor in anchors}
+        # Unknown sections remain deterministic and are appended after known ones.
+        anchors.extend(SectionAnchor(category, doc.page_count, MARGIN_T, None) for category in sorted(set(image_sections) - known))
+        figure = 1
+        inserted = 0
+        printable_bottom = PAGE_H - MARGIN_B
+        for anchor in anchors:
+            remaining = list(image_sections.get(anchor.category, []))
+            if not remaining:
+                continue
+            page_index = anchor.page + inserted
+            if page_index >= doc.page_count:
+                page_index = self._new_continuation_page(doc, doc.page_count, inserted)
+                inserted += 1
+                cursor_y = CONTINUATION_CURSOR_Y
+                page_limit = printable_bottom
+                continuation = True
+            else:
+                cursor_y = max(MARGIN_T, anchor.cursor_y)
+                page_limit = min(printable_bottom, anchor.next_anchor_y or printable_bottom)
+                continuation = False
+
+            while remaining:
+                layout = self.image_layout_engine.solve(remaining, x=MARGIN_L, y=cursor_y, width=PAGE_W - MARGIN_L - MARGIN_R, height=page_limit - cursor_y)
+                if layout.page_break_recommendation:
+                    insertion = page_index + 1
+                    page_index = self._new_continuation_page(doc, insertion, inserted)
+                    inserted += 1
+                    cursor_y = CONTINUATION_CURSOR_Y
+                    page_limit = printable_bottom
+                    continuation = True
+                    continue
+                self._render_grid(doc[page_index], layout, figure, anchor.category)
+                figure += len(layout.placed)
+                remaining = layout.remaining
+                cursor_y += layout.required_height + SECTION_GAP
+                if remaining:
+                    page_index = self._new_continuation_page(doc, page_index + 1, inserted)
+                    inserted += 1
+                    cursor_y = CONTINUATION_CURSOR_Y
+                    page_limit = printable_bottom
+                    continuation = True
+
+    def _new_continuation_page(self, doc: fitz.Document, position: int, inserted: int) -> int:
+        source = min(CONTINUATION_TEMPLATE_PAGE, doc.page_count - 1)
+        self.page_renderer.duplicate_template_page(doc, source, position)
+        page = doc[position]
+        # A copied template page may contain its own body text (for example a
+        # conclusions page).  Continuations reserve a clean flow canvas while
+        # retaining the template's header and footer artwork.
+        page.draw_rect(
+            fitz.Rect(MARGIN_L, MARGIN_T, PAGE_W - MARGIN_R, PAGE_H - MARGIN_B),
+            color=(1, 1, 1),
+            fill=(1, 1, 1),
+            width=0,
+        )
+        title = "FOTOS DE INSPEÇÃO (CONT.)"
+        self.text_renderer.render_title(page, title, MARGIN_L, MARGIN_T)
+        return position
+
+    def _render_grid(self, page: fitz.Page, layout: GridLayout, figure: int, category: str) -> None:
+        for offset, placement in enumerate(layout.placed):
+            rect = fitz.Rect(*placement.rect_coords)
+            if isinstance(placement.data, str):
+                page.insert_image(rect, filename=placement.data, keep_proportion=True)
+            else:
+                page.insert_image(rect, stream=placement.data, keep_proportion=True)
+            page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
+            caption = f"Figura {figure + offset} – {self._get_category_title(category)}."
+            caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
+            page.insert_text(fitz.Point(placement.caption_point_coords[0] - caption_width / 2, placement.caption_point_coords[1]), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
+
+    @staticmethod
+    def _get_category_title(category: str) -> str:
+        titles = {"le_print": "Laudo de Exigências", "extintor": "Extintor de incêndio", "hidrante_recalque": "Hidrante de recalque", "hidrante_urbano": "Hidrante urbano", "hidrante_caixa": "Caixa de mangueira", "cmi_exterior": "Casa de máquinas – vista externa", "cmi_interior": "Casa de máquinas – interior", "bomba_placa": "Placa de identificação da bomba", "curva_bomba": "Curva de desempenho da bomba", "alarme": "Alarme de incêndio", "sprinkler": "Sprinkler", "sinalizacao": "Sinalização de segurança", "iluminacao_emergencia": "Iluminação de emergência", "saida_emergencia": "Saída de emergência", "risco_especifico": "Risco específico", "fachada": "Fachada da edificação", "visao_geral": "Visão geral", "fotos_gerais": "Fotos gerais de inspeção"}
+        return titles.get(category, category.replace("_", " ").title())
