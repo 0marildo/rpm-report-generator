@@ -74,7 +74,14 @@ class ImageLayoutEngine:
         }
 
     def solve(
-        self, images: list[dict], *, x: float, y: float, width: float, height: float
+        self,
+        images: list[dict],
+        *,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        require_full_width: bool = False,
     ) -> GridLayout:
         """Measure the next page-sized batch in the supplied flow region.
 
@@ -103,7 +110,13 @@ class ImageLayoutEngine:
         # is based on the batch, not on a template sample-image rectangle.
         aspects = [self._aspect(image.get("data") or image.get("path")) for image in batch]
         representative_aspect = max(0.25, min(4.0, float(median(aspects))))
-        image_height = min(max_image_height, cell_width / representative_aspect)
+        preferred_image_height = cell_width / representative_aspect
+        # On an anchored template page, do not narrow a grid merely to squeeze
+        # it before the next text block. The paginator will put it on a clean
+        # continuation page, where vertical space is genuinely available.
+        if require_full_width and max_image_height + 0.01 < preferred_image_height:
+            return GridLayout([], images, 0.0, True)
+        image_height = min(max_image_height, preferred_image_height)
         if image_height <= 0:
             return GridLayout([], images, 0.0, True)
 

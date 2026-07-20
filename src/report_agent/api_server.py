@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .pipeline.orchestrator import ExtractionOrchestrator
 from .pipeline.document_merger import DocumentMerger
+from .services.template_parser import DEFAULT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ async def extract(
 @app.post("/api/generate-report")
 async def generate_report(
     extracted_fields: str = Form(...),
-    template_name: str = Form("template_images.pdf"),
+    template_name: str = Form(DEFAULT_TEMPLATE),
     output_filename: str = Form("report.pdf"),
     images: list[UploadFile] = File(default=[]),
     image_categories: str = Form("{}"),
@@ -405,7 +406,7 @@ def handle_generate(pdf_files, *args):
 
     try:
         from .services.report_generator import ReportGenerator
-        generator = ReportGenerator(template_name="new_template.pdf")
+        generator = ReportGenerator(template_name=DEFAULT_TEMPLATE)
         result = generator.generate(
             output_path=output_path,
             fields=fields,

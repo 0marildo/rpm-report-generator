@@ -20,7 +20,7 @@ data class ExtractResponse(
 
 data class GenerateRequest(
     @SerializedName("extracted_fields") val extractedFields: Map<String, String>,
-    @SerializedName("template_name") val templateName: String = "template_images.pdf",
+    @SerializedName("template_name") val templateName: String = "template novo v2.pdf",
     @SerializedName("output_filename") val outputFilename: String = "report.pdf",
 )
 

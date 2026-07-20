@@ -1,6 +1,6 @@
 """Template-aware PDF renderer.
 
-Fills text fields and places images into the new_template.pdf using
+Fills text fields and places images into the production template using
 dynamically discovered field positions and image placeholder zones.
 """
 

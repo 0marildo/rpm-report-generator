@@ -3,7 +3,7 @@ import sys
 import fitz
 
 def render_pages():
-    template_path = "/home/hamzaelnajmi/report-agent/templates/new_template.pdf"
+    template_path = "/home/hamzaelnajmi/report-agent/templates/template novo v2.pdf"
     output_dir = "/home/hamzaelnajmi/report-agent/static/template_pages"
     os.makedirs(output_dir, exist_ok=True)
     

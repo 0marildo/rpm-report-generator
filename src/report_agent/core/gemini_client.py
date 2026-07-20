@@ -16,7 +16,7 @@ class GeminiClient:
                 "GEMINI_API_KEY not set. Create a .env file or export the variable."
             )
         self.model_name = model_name or os.getenv(
-            "GEMINI_MODEL", "gemini-2.5-flash-001"
+            "GEMINI_MODEL", "gemini-2.5-flash"
         )
         self.llm = ChatGoogleGenerativeAI(
             model=self.model_name,

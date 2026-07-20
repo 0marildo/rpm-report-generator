@@ -79,7 +79,7 @@ actor ApiService {
 
     // MARK: - Generate
 
-    func generate(extractedFields: [String: String], images: [(data: Data, filename: String, category: String)], templateName: String = "template_images.pdf") async throws -> Data {
+    func generate(extractedFields: [String: String], images: [(data: Data, filename: String, category: String)], templateName: String = "template novo v2.pdf") async throws -> Data {
         let url = URL(string: baseURL + "/api/generate-report")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

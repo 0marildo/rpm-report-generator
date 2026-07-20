@@ -6,7 +6,9 @@ from typing import Optional
 import fitz
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent.parent / "templates"
-DEFAULT_TEMPLATE = "new_template.pdf"
+# The production template contains section instructions only; it no longer
+# embeds sample photographs that have to be removed during report generation.
+DEFAULT_TEMPLATE = "template novo v2.pdf"
 
 PAGE_W = 595
 PAGE_H = 842

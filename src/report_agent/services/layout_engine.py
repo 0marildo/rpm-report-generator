@@ -35,7 +35,7 @@ class SectionAnchor:
     category: str
     page: int
     cursor_y: float
-    next_anchor_y: float | None
+    flow_bottom: float | None
 
 
 class SectionAnalyzer:
@@ -57,12 +57,19 @@ class SectionAnalyzer:
         ordered = sorted(first_by_category.values(), key=lambda p: (p.page, p.insert_rect[1]))
         result: list[SectionAnchor] = []
         for index, placeholder in enumerate(ordered):
-            next_y = None
+            next_anchor_y = None
             if index + 1 < len(ordered) and ordered[index + 1].page == placeholder.page:
-                next_y = ordered[index + 1].insert_rect[1] - SECTION_GAP
+                next_anchor_y = ordered[index + 1].insert_rect[1] - SECTION_GAP
+            # ``area_bottom`` is calculated by the parser from the next text
+            # block on the page. It is a collision boundary, not an image
+            # placeholder size: the grid solver still receives the entire
+            # remaining flow region and paginates rather than shrinking.
+            flow_bottom = placeholder.area_bottom
+            if next_anchor_y is not None:
+                flow_bottom = min(flow_bottom, next_anchor_y)
             # Only the insertion text baseline is used.  area_* dimensions are
             # intentionally ignored by the flow engine.
-            result.append(SectionAnchor(placeholder.category, placeholder.page, placeholder.insert_rect[1], next_y))
+            result.append(SectionAnchor(placeholder.category, placeholder.page, placeholder.insert_rect[1], flow_bottom))
         return result
 
 
@@ -103,10 +110,11 @@ class LayoutEngine:
                 if placeholder.page >= doc.page_count:
                     continue
                 page = doc[placeholder.page]
-                # Clear only template sample content.  Its dimensions are never
-                # passed to the layout solver.
+                # The v2 template has no embedded sample images.  Clear the
+                # instruction itself, leaving all other template text and
+                # artwork intact. Placeholder dimensions are never passed to
+                # the layout solver.
                 page.draw_rect(fitz.Rect(placeholder.insert_rect), color=(1, 1, 1), fill=(1, 1, 1), width=0)
-                page.draw_rect(fitz.Rect(0, placeholder.insert_rect[1], PAGE_W, PAGE_H - MARGIN_B), color=(1, 1, 1), fill=(1, 1, 1), width=0)
 
     def _layout_photos(self, doc: fitz.Document, image_sections: dict[str, list[dict]]) -> None:
         anchors = SectionAnalyzer(self.tpl).anchors()
@@ -122,21 +130,28 @@ class LayoutEngine:
                 continue
             page_index = anchor.page + inserted
             if page_index >= doc.page_count:
-                page_index = self._new_continuation_page(doc, doc.page_count, inserted)
+                page_index = self._new_continuation_page(doc, doc.page_count, anchor.category)
                 inserted += 1
                 cursor_y = CONTINUATION_CURSOR_Y
                 page_limit = printable_bottom
                 continuation = True
             else:
                 cursor_y = max(MARGIN_T, anchor.cursor_y)
-                page_limit = min(printable_bottom, anchor.next_anchor_y or printable_bottom)
+                page_limit = min(printable_bottom, anchor.flow_bottom or printable_bottom)
                 continuation = False
 
             while remaining:
-                layout = self.image_layout_engine.solve(remaining, x=MARGIN_L, y=cursor_y, width=PAGE_W - MARGIN_L - MARGIN_R, height=page_limit - cursor_y)
+                layout = self.image_layout_engine.solve(
+                    remaining,
+                    x=MARGIN_L,
+                    y=cursor_y,
+                    width=PAGE_W - MARGIN_L - MARGIN_R,
+                    height=page_limit - cursor_y,
+                    require_full_width=not continuation,
+                )
                 if layout.page_break_recommendation:
                     insertion = page_index + 1
-                    page_index = self._new_continuation_page(doc, insertion, inserted)
+                    page_index = self._new_continuation_page(doc, insertion, anchor.category)
                     inserted += 1
                     cursor_y = CONTINUATION_CURSOR_Y
                     page_limit = printable_bottom
@@ -147,13 +162,13 @@ class LayoutEngine:
                 remaining = layout.remaining
                 cursor_y += layout.required_height + SECTION_GAP
                 if remaining:
-                    page_index = self._new_continuation_page(doc, page_index + 1, inserted)
+                    page_index = self._new_continuation_page(doc, page_index + 1, anchor.category)
                     inserted += 1
                     cursor_y = CONTINUATION_CURSOR_Y
                     page_limit = printable_bottom
                     continuation = True
 
-    def _new_continuation_page(self, doc: fitz.Document, position: int, inserted: int) -> int:
+    def _new_continuation_page(self, doc: fitz.Document, position: int, category: str) -> int:
         source = min(CONTINUATION_TEMPLATE_PAGE, doc.page_count - 1)
         self.page_renderer.duplicate_template_page(doc, source, position)
         page = doc[position]
@@ -166,7 +181,7 @@ class LayoutEngine:
             fill=(1, 1, 1),
             width=0,
         )
-        title = "FOTOS DE INSPEÇÃO (CONT.)"
+        title = f"{self._get_category_title(category).upper()} (CONT.)"
         self.text_renderer.render_title(page, title, MARGIN_L, MARGIN_T)
         return position
 
