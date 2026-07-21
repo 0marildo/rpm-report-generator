@@ -1,2 +1,0 @@
-[console_scripts]
-report-agent = report_agent.ui.app:main
