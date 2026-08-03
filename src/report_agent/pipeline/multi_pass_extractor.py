@@ -1,36 +1,83 @@
-"""Template-driven Multi-pass Extractor using Gemini."""
+"""Template-driven Page-chunked Extractor using Gemini."""
 
 import json
 import logging
+import os
 import re
 from typing import Optional
 
+import fitz
+from PIL import Image
+import io
+
 logger = logging.getLogger(__name__)
 
+PAGE_IMAGE_DPI = int(os.getenv("PAGE_IMAGE_DPI", "200"))
+CHUNK_PAGES = int(os.getenv("CHUNK_PAGES", "4"))
+MAX_IMAGE_SIDE = int(os.getenv("MAX_IMAGE_SIDE", "1024"))
+
 SCHEMA_FIELDS = {
-    "company_name": "Razão social da empresa responsável pela edificação (se disponível).",
+    "company_name": "Razão social da empresa responsável pela edificação.",
     "client_name": "Nome do proprietário ou responsável técnico do imóvel.",
-    "cnpj": "CNPJ da empresa ou CPF do proprietário no formato padrão.",
+    "cnpj": "CNPJ da empresa ou CPF do proprietário.",
     "address": "Endereço completo da edificação (logradouro, número, bairro, cidade, UF).",
-    "process_number": "Número do processo no CBMERJ (ex: E-27/... ou E27/...).",
+    "process_number": "Número do processo no CBMERJ (ex: E-27/...).",
     "report_number": "Número do Laudo de Exigências (ex: LE-XXXXX/XX).",
-    "classification": "Classificação da edificação de acordo com o COSCIP / Decreto Estadual (ex: A-1, F-3, E-1).",
-    "building_area": "Área total construída em metros quadrados (m²).",
+    "classification": "Classificação da edificação (ex: A-1, F-3, E-1).",
+    "building_area": "Área total construída em m².",
     "floors": "Número de pavimentos da edificação.",
-    "engineer": "Nome do engenheiro civil ou profissional técnico que assina o laudo.",
-    "crea": "Número de registro no CREA do engenheiro responsável.",
-    "approved_systems": "Sistemas de segurança contra incêndio e pânico aprovados (ex: extintores, hidrantes, sinalização, alarmes).",
-    "specific_risks": "Riscos específicos listados no laudo (ex: gerador, gás canalizado, subestação elétrica, pressurização de escadas).",
-    "observations": "Observações gerais adicionais contidas no laudo de exigências.",
+    "engineer": "Nome do engenheiro que assina o laudo.",
+    "crea": "Número de registro no CREA do engenheiro.",
+    "approved_systems": "Sistemas de segurança contra incêndio e pânico aprovados.",
+    "specific_risks": "Riscos específicos listados no laudo (ex: gerador, gás canalizado, subestação elétrica).",
+    "observations": "Observações gerais do laudo.",
     "fabricante": "Fabricante da bomba de incêndio principal/jockey.",
     "serie": "Número de série da bomba de incêndio.",
     "modelo": "Modelo da bomba de incêndio.",
-    "vazao_nominal": "Vazão nominal da bomba de incêndio (ex: em m³/h, L/min, gpm).",
-    "pressao_nominal": "Pressão nominal da bomba de incêndio (ex: em mca, bar, psi).",
-    "rpm": "RPM (Rotações por Minuto) de regime da bomba.",
-    "diametro_rotor": "Diâmetro do rotor da bomba de incêndio (ex: em mm ou polegadas).",
-    "potencia_cv": "Potência do motor da bomba em CV (Cavalos-Vapor) ou HP."
+    "vazao_nominal": "Vazão nominal da bomba (ex: m³/h, L/min, gpm).",
+    "pressao_nominal": "Pressão nominal da bomba (ex: mca, bar, psi).",
+    "rpm": "RPM de regime da bomba.",
+    "diametro_rotor": "Diâmetro do rotor da bomba (ex: mm ou polegadas).",
+    "potencia_cv": "Potência do motor da bomba em CV ou HP.",
 }
+
+
+def _downscale_image(data: bytes, mime_type: str = "image/png") -> bytes:
+    try:
+        image = Image.open(io.BytesIO(data))
+        width, height = image.size
+        fmt_map = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}
+        if width <= MAX_IMAGE_SIDE and height <= MAX_IMAGE_SIDE:
+            return data
+        ratio = min(MAX_IMAGE_SIDE / width, MAX_IMAGE_SIDE / height)
+        new_size = (int(width * ratio), int(height * ratio))
+        resized = image.resize(new_size, Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        resized.save(out, format=fmt_map.get(mime_type.lower().split(";")[0], "PNG"))
+        return out.getvalue()
+    except Exception:
+        return data
+
+
+def _pdf_page_chunks(
+    pdf_path: str,
+    *,
+    dpi: int = PAGE_IMAGE_DPI,
+    chunk_pages: int = CHUNK_PAGES,
+):
+    doc = fitz.open(pdf_path)
+    total = len(doc)
+    for start in range(0, total, chunk_pages):
+        end = min(start + chunk_pages, total)
+        chunks = []
+        for page_index in range(start, end):
+            page = doc[page_index]
+            pix = page.get_pixmap(dpi=dpi)
+            data = _downscale_image(pix.tobytes("png"), "image/png")
+            chunks.append((page_index + 1, data, "image/png"))
+        yield start + 1, end, chunks
+    doc.close()
+
 
 class MultiPassExtractor:
     def __init__(self, gemini=None):
@@ -44,119 +91,71 @@ class MultiPassExtractor:
 
     def extract(self, pdf_path: str, raw_text: Optional[str] = None) -> dict[str, str]:
         gemini = self._get_gemini()
-        is_scanned = raw_text is None or len(raw_text.strip()) < 100
-        
-        context_desc = "OCR do PDF Digital" if not is_scanned else "Multimodal Visão do PDF"
-        logger.info("Iniciando extração multi-passo (%s) de %s", context_desc, pdf_path)
+        logger.info("Iniciando extração chunked por páginas de %s", pdf_path)
 
-        # ----------------------------------------------------
-        # PASS 1: EXTRAÇÃO INICIAL
-        # ----------------------------------------------------
-        logger.info("Passo 1: Extração inicial de campos estruturados")
-        schema_desc = json.dumps(SCHEMA_FIELDS, indent=2, ensure_ascii=False)
-        
-        prompt_p1 = f"""Você é um engenheiro especialista em segurança contra incêndio e pânico e analista de documentos do CBMERJ.
-Sua missão é ler o documento fornecido e preencher os seguintes campos necessários para o relatório técnico final:
+        fields: dict[str, str] = {}
 
-Campos requeridos e suas descrições:
-{schema_desc}
+        for page_start, page_end, pages in _pdf_page_chunks(pdf_path):
+            logger.info("Processando páginas %d-%d", page_start, page_end)
 
-Retorne um objeto JSON contendo todas as chaves acima. Preencha com null ou string vazia se o campo correspondente não for encontrado.
-Não resuma nem ignore campos. Retorne APENAS um JSON válido."""
-
-        if is_scanned:
-            raw_p1 = gemini.generate_with_pdf(
-                prompt=prompt_p1,
-                pdf_path=pdf_path,
-                system_instruction="Analista de PDF multimodal especializado. Extraia informações textuais e visuais com precisão absoluta. Retorne APENAS JSON."
+            schema_desc = json.dumps(
+                {k: v for k, v in SCHEMA_FIELDS.items()}, indent=2, ensure_ascii=False
             )
-        else:
-            raw_p1 = gemini.generate(
-                prompt=f"{prompt_p1}\n\nDocumento (Texto):\n{raw_text}",
-                system_instruction="Analista de texto estruturado. Extraia dados do texto do Laudo de Exigências com precisão absoluta. Retorne APENAS JSON."
+            prompt = (
+                f"Você receberá imagens de {page_start} a {page_end} páginas do documento.\n"
+                f"Extraia os seguintes campos e retorne SOMENTE JSON válido.\n"
+                f"Campos:\n{schema_desc}\n"
+                f"Regras:\n"
+                f"- Use string vazia se não encontrado.\n"
+                f"- Não invente dados.\n"
+                f"- Não retorne texto fora do JSON.\n"
             )
 
-        fields = self._parse_json(raw_p1)
-        
-        # Clean nulls
-        fields = {k: str(v).strip() for k, v in fields.items() if v is not None and str(v).strip() != ""}
-
-        # ----------------------------------------------------
-        # PASS 2 & 3: ANÁLISE DE CAMPOS AUSENTES E BUSCA DIRECIONADA
-        # ----------------------------------------------------
-        missing_keys = [k for k in SCHEMA_FIELDS.keys() if not fields.get(k)]
-        
-        if missing_keys:
-            logger.info("Passo 2 e 3: Identificados %d campos ausentes. Iniciando busca direcionada.", len(missing_keys))
-            missing_schema = {k: SCHEMA_FIELDS[k] for k in missing_keys}
-            missing_schema_desc = json.dumps(missing_schema, indent=2, ensure_ascii=False)
-            
-            prompt_p3 = f"""Temos os seguintes dados já extraídos:
-{json.dumps(fields, indent=2, ensure_ascii=False)}
-
-Entretanto, precisamos obrigatoriamente preencher os seguintes campos que estão faltando:
-{missing_schema_desc}
-
-Por favor, faça uma busca detalhada e profunda em todo o documento para localizar essas informações faltantes. Correlacione dados de diferentes seções ou tabelas se necessário (por exemplo, informações sobre bombas costumam ficar em tabelas de testes na casa de máquinas).
-Retorne um objeto JSON contendo apenas os campos que você conseguir encontrar agora com seus respectivos valores. Retorne null para os que continuam ausentes. Retorne APENAS JSON válido."""
-
-            if is_scanned:
-                raw_p3 = gemini.generate_with_pdf(
-                    prompt=prompt_p3,
-                    pdf_path=pdf_path,
-                    system_instruction="Analista focado em recuperação de dados perdidos em PDFs. Faça busca minuciosa nos detalhes visuais e tabelas."
-                )
-            else:
-                raw_p3 = gemini.generate(
-                    prompt=f"{prompt_p3}\n\nDocumento (Texto):\n{raw_text}",
-                    system_instruction="Analista focado em recuperação de dados perdidos. Faça busca minuciosa no texto do Laudo."
+            content = [{"type": "text", "text": prompt}]
+            for page_num, image_data, mime_type in pages:
+                b64 = __import__("base64").b64encode(image_data).decode("utf-8")
+                content.append({"type": "text", "text": f"[Pagina {page_num}]"})
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{b64}"},
+                    }
                 )
 
-            extra_fields = self._parse_json(raw_p3)
-            for k, v in extra_fields.items():
-                if v is not None and str(v).strip() != "" and k in missing_keys:
-                    fields[k] = str(v).strip()
-                    logger.info("Campo ausente recuperado no Passo 3: %s = %s", k, v)
-        else:
-            logger.info("Nenhum campo ausente identificado para o Passo 3.")
+            messages = [
+                {
+                    "role": "user",
+                    "content": content,
+                }
+            ]
 
-        # ----------------------------------------------------
-        # PASS 4: CONSISTÊNCIA, VALIDAÇÃO E FORMATAÇÃO
-        # ----------------------------------------------------
-        logger.info("Passo 4: Validação de consistência e formatação de dados")
-        prompt_p4 = f"""Você é o validador de dados finais do relatório técnico.
-Aqui estão os campos que extraímos até agora:
-{json.dumps(fields, indent=2, ensure_ascii=False)}
+            try:
+                response = gemini.llm.invoke(messages)
+                raw = response.content if hasattr(response, "content") else str(response)
+            except Exception as exc:
+                logger.warning("Falha no chunk %d-%d: %s", page_start, page_end, exc)
+                continue
 
-Por favor, faça uma revisão de qualidade e consistência nesses dados para garantir que estão prontos para publicação:
-1. CNPJ/CPF: Garanta a formatação padrão XX.XXX.XXX/XXXX-XX ou CPF equivalente.
-2. Área total: Garanta a unidade em m² (ex: "1.250 m²").
-3. Número de pavimentos: Deve conter apenas o número de pavimentos (ex: "3" ou "Térreo + 2").
-4. Processo / Laudo de Exigências: Remova ruídos ou formatações inconsistentes.
-5. Bombas de incêndio: Certifique-se de que os valores numéricos de vazão, pressão, rotor e potência têm suas respectivas unidades se mencionadas no texto.
+            parsed = self._parse_json(raw)
+            for key in SCHEMA_FIELDS:
+                val = parsed.get(key, "")
+                if val is None:
+                    val = ""
+                val = str(val).strip()
+                if val and key not in fields:
+                    fields[key] = val
+                    logger.info("Chunk %d-%d extraiu: %s = %s", page_start, page_end, key, val)
 
-Retorne o JSON final formatado contendo todos os 22 campos da especificação inicial (use string vazia se o campo não existir de fato no documento). Retorne APENAS o JSON válido."""
+        fields["_report_hash"] = self._make_hash(pdf_path, fields)
+        return fields
 
-        raw_p4 = gemini.generate(
-            prompt=prompt_p4,
-            system_instruction="Revisor final de dados estruturados. Formate e limpe os campos com precisão profissional. Retorne APENAS JSON válido."
-        )
-        
-        final_fields = self._parse_json(raw_p4)
-        
-        # Fallback to fields if final parsing fails
-        if not final_fields:
-            final_fields = fields
-
-        # Final sanitization
-        cleaned_final = {}
-        for k in SCHEMA_FIELDS.keys():
-            val = final_fields.get(k) or fields.get(k) or ""
-            cleaned_final[k] = str(val).strip()
-
-        logger.info("Extração multi-passo concluída com sucesso! Total de campos preenchidos: %d", 
-                    len([v for v in cleaned_final.values() if v]))
-        return cleaned_final
+    @staticmethod
+    def _make_hash(pdf_path: str, fields: dict[str, str]) -> str:
+        import hashlib
+        with open(pdf_path, "rb") as f:
+            base = f.read()
+        data = base + json.dumps(fields, ensure_ascii=False).encode("utf-8")
+        return hashlib.sha256(data).hexdigest()[:16]
 
     def _parse_json(self, text: str) -> dict:
         text = text.strip()
@@ -174,5 +173,5 @@ Retorne o JSON final formatado contendo todos os 22 campos da especificação in
                     return json.loads(text[start:end + 1])
                 except json.JSONDecodeError:
                     pass
-        logger.warning("Erro ao decodificar JSON do Gemini: %.200s", text)
+        logger.warning("Falha ao parsear JSON do Gemini: %.200s", text)
         return {}

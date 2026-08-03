@@ -6,11 +6,15 @@
     <title>Gerador de Laudos Técnicos de Segurança Contra Incêndio</title>
     
     <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
+        /* ==========================================================================
+           DESIGN TOKENS / VARIÁVEIS GERAIS
+           - Cores, sombras, raios e transições usados por todo o layout
+           ========================================================================== */
         :root {
             --primary: #d9383a;
             --primary-hover: #b82d2f;
@@ -55,7 +59,10 @@
             height: -webkit-fill-available;
         }
 
-        /* App Layout */
+        /* ==========================================================================
+           HEADER
+           - Barra superior fixa: título + ações de Limpar / Gerar PDF Final
+           ========================================================================== */
         header {
             background-color: var(--bg-surface);
             border-bottom: 1px solid var(--border-color);
@@ -141,7 +148,10 @@
             box-shadow: none !important;
         }
 
-        /* Main Workspace Container */
+        /* ==========================================================================
+           APP BODY / SIDEBAR + PREVIEW
+           Layout principal: sidebar à esquerda e preview à direita
+           ========================================================================== */
         .app-body {
             display: flex;
             flex: 1;
@@ -149,7 +159,7 @@
             position: relative;
         }
 
-        /* Sidebar Navigation & Panels */
+        /* Sidebar: Upload / Dados / Fotos */
         .sidebar {
             width: 420px;
             background-color: var(--bg-surface);
@@ -216,7 +226,12 @@
             border-radius: 3px;
         }
 
-        /* Live Preview Pane */
+        /* ==========================================================================
+           LIVE PREVIEW
+           Área direita que simula as páginas do template com:
+           - texto preenchido em overlays absolutos
+           - imagens posicionadas por placeholders do template
+           ========================================================================== */
         .preview-pane {
             flex: 1;
             background-color: #cbd5e1;
@@ -282,7 +297,10 @@
             text-align: center;
         }
 
-        /* Document Upload Tab Elements */
+        /* ==========================================================================
+           UPLOAD / DOCUMENTOS
+           Zona de upload de PDFs e status de extração
+           ========================================================================== */
         .upload-zone {
             border: 2px dashed #cbd5e1;
             border-radius: var(--radius-md);
@@ -420,7 +438,10 @@
             color: var(--text-main);
         }
 
-        /* Form / Fields Tab Elements */
+        /* ==========================================================================
+           CAMPOS / FORMULÁRIO
+           Campos que alimentam o template via /api/generate-report
+           ========================================================================== */
         .field-group {
             margin-bottom: 24px;
         }
@@ -469,7 +490,11 @@
             outline: none;
         }
 
-        /* Photo Manager Accordions */
+        /* ==========================================================================
+           FOTOS
+           Gerenciador de imagens por seção/categoria do template.
+           Cada categoria corresponde a um bloco INSERIR do template.
+           ========================================================================== */
         .photo-section {
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
@@ -611,7 +636,12 @@
             color: var(--primary);
         }
 
-        /* Visual Page Representation in Live Preview */
+        /* ==========================================================================
+           LIVE PREVIEW - PÁGINAS E OVERLAYS
+           - Cada página do template é renderizada como uma div `.preview-page`
+           - Textos extraídos viram `.text-overlay` posicionados por coordenadas do parser
+           - Imagens são colocadas dentro de áreas definidas por placeholders
+           ========================================================================== */
         .preview-page-wrapper {
             background-color: white;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
@@ -624,7 +654,8 @@
         }
 
         .preview-page {
-            width: 595px; /* A4 Ratio */
+            /* A4 visual no browser; template real é A4 = 595x842 pt */
+            width: 595px;
             height: 842px;
             position: relative;
             background-size: 100% 100%;
@@ -644,7 +675,7 @@
             border-radius: 10px;
         }
 
-        /* Text overlay style */
+        /* Text overlay style: texto extraído sobre o template */
         .text-overlay {
             position: absolute;
             font-family: 'Helvetica', Arial, sans-serif;
@@ -656,7 +687,7 @@
             pointer-events: none;
         }
 
-        /* Image Placeholder Box Overlay */
+        /* Image Placeholder Box Overlay: caixas vazias quando falta imagem */
         .image-placeholder-overlay {
             position: absolute;
             outline: 1px dashed rgba(217, 56, 58, 0.4);
@@ -709,7 +740,7 @@
             padding: 0 2px;
         }
 
-        /* Dynamic Overflow Page Overlay */
+        /* Dynamic Overflow Page Overlay: páginas extras quando fotos não cabem */
         .overflow-header {
             position: absolute;
             left: 35px;
@@ -822,17 +853,22 @@
 </head>
 <body>
 
-    <!-- Header bar -->
+    <!-- ==========================================================================
+         HEADER
+         Ações globais: limpar formulário/fotos ou gerar PDF final
+         ========================================================================== -->
     <header>
         <div class="header-title">
             <h1><span>CBMERJ</span> Laudo Técnico</h1>
             <p>Gerador Profissional de Laudo Circunstanciado</p>
         </div>
         <div class="header-actions">
+            <!-- Reseta todos os campos e fotos carregadas -->
             <button class="btn btn-secondary" id="clear-btn" title="Limpar tudo">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m7 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Limpar
             </button>
+            <!-- Dispara POST /api/generate-report com campos + images + image_categories -->
             <button class="btn btn-primary" id="generate-btn">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Gerar PDF Final
@@ -840,7 +876,10 @@
         </div>
     </header>
 
-    <!-- App Body -->
+    <!-- ==========================================================================
+         APP BODY
+         Layout: sidebar à esquerda, preview à direita
+         ========================================================================== -->
     <div class="app-body">
         
         <!-- Left panel sidebar -->
@@ -855,12 +894,19 @@
                 
                 <!-- Tab 1: Upload PDFs -->
                 <div class="panel active" id="tab-upload">
+                    <!--
+                        DROPZONE
+                        - Aceita múltiplos PDFs
+                        - Envia para /api/extract como multipart em `files`
+                        - Backend extrai os campos e devolve `extractedFields`
+                    -->
                     <div class="upload-zone" id="pdf-dropzone">
                         <div class="upload-icon">
                             <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </div>
                         <h3>Upload de PDF de Referência</h3>
                         <p>Arraste e solte Laudos de Exigências (LE) ou clique para selecionar</p>
+                        <!-- múltiplos PDFs, envio em FormData `files` -->
                         <input type="file" id="pdf-input" multiple accept=".pdf" style="display: none;">
                     </div>
                     
@@ -880,6 +926,12 @@
                 
                 <!-- Tab 2: Extracted Fields Editor -->
                 <div class="panel" id="tab-fields">
+                    <!--
+                        FORMULÁRIO
+                        - Cada input tem `name` igual à chave do JSON de extração
+                        - Esses nomes são usados tanto para preencher o preview quanto
+                          para montar o payload do /api/generate-report
+                    -->
                     <form id="fields-form">
                         
                         <div class="field-group">
@@ -1018,6 +1070,11 @@
                 <!-- Tab 3: Inspection Photo Manager -->
                 <div class="panel" id="tab-photos">
                     <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        <!--
+                            Mapeamento direto para as categorias do template:
+                            ver `template_parser.PLACEHOLDER_RULES` e
+                            `REPORT_SECTIONS` no backend.
+                        -->
                         Carregue fotos para cada seção do relatório. O layout de fotos se ajusta automaticamente.
                     </p>
                     
@@ -1058,7 +1115,15 @@
 
     <!-- Core Javascript Logic -->
     <script>
-        // Photo categories configuration matching templates and template_parser rules
+        /* ==========================================================================
+           PHOTO_CATEGORIES
+           IDs usados pelo `template_parser.py` para classificar cada bloco
+           "INSERIR/COLOCAR" do template em uma categoria de imagem.
+           
+           Alterações aqui refletem em:
+           - frontend: upload por seção
+           - backend: limpeza/posicionamento das imagens
+           ========================================================================== */
         const PHOTO_CATEGORIES = [
             { id: "le_print", label: "Laudo de Exigências (Print)" },
             { id: "fachada", label: "Fachada da Edificação" },
@@ -1079,7 +1144,12 @@
             { id: "visao_geral", label: "Visão Geral / Dispositivos" }
         ];
 
-        // State Store
+        /* ==========================================================================
+           STATE
+           - fields: espelha os inputs do formulário
+           - photos: imagens por categoria/categoryId
+           - templateLayout: JSON de /api/template-layout com coordenadas
+           ========================================================================== */
         const state = {
             fields: {},
             photos: {}, // format: { categoryId: [ { file, dataUrl, name } ] }
@@ -1093,7 +1163,10 @@
             state.photos[cat.id] = [];
         });
 
-        // DOM elements
+        /* ==========================================================================
+           DOM REFERENCES
+           Elementos principais usados por handlers
+           ========================================================================== */
         const tabs = document.querySelectorAll('.tab-btn');
         const panels = document.querySelectorAll('.panel');
         const pdfInput = document.getElementById('pdf-input');
@@ -1116,7 +1189,10 @@
         const scaleInc = document.getElementById('scale-inc');
         const scaleDec = document.getElementById('scale-dec');
 
-        // Zoom Scale Factor handler
+        /* ==========================================================================
+           ZOOM DO PREVIEW
+           Aplica escala nas `.preview-page` e ajusta wrapper
+           ========================================================================== */
         function setScale(newScale) {
             state.scale = Math.min(2.0, Math.max(0.4, newScale));
             scaleVal.innerText = `${Math.round(state.scale * 100)}%`;
@@ -1126,7 +1202,10 @@
         scaleInc.addEventListener('click', () => setScale(state.scale + 0.1));
         scaleDec.addEventListener('click', () => setScale(state.scale - 0.1));
 
-        // Tab selection handler
+        /* ==========================================================================
+           TABS
+           Navegação entre Upload / Dados / Fotos
+           ========================================================================== */
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 tabs.forEach(t => t.classList.remove('active'));
@@ -1139,7 +1218,9 @@
             });
         });
 
-        // Setup dropzone styles
+        /* ==========================================================================
+           DRAG & DROP DO PDF
+           ========================================================================== */
         ['dragenter', 'dragover'].forEach(eventName => {
             pdfDropzone.addEventListener(eventName, (e) => {
                 e.preventDefault();
@@ -1165,7 +1246,10 @@
             if (e.target.files.length) handlePDFUpload(e.target.files);
         });
 
-        // Clear State
+        /* ==========================================================================
+           CLEAR
+           Reseta formulário, fotos, preview e UI
+           ========================================================================== */
         clearBtn.addEventListener('click', () => {
             if (confirm("Deseja realmente limpar todos os campos e imagens carregadas?")) {
                 fieldsForm.reset();
@@ -1181,7 +1265,10 @@
             }
         });
 
-        // Trigger PDF generation on backend
+        /* ==========================================================================
+           GERAÇÃO DO PDF FINAL
+           Monta multipart e envia para /api/generate-report
+           ========================================================================== */
         generateBtn.addEventListener('click', async () => {
             loadingModal.classList.add('active');
             modalTitle.innerText = "Gerando Relatório Técnico";
@@ -1196,6 +1283,19 @@
                     fieldsObj[inp.name] = inp.value;
                 });
 
+                /* 
+                    IMPORTANTE PARA POSICIONAMENTO:
+                    O backend gere os PDF unindo:
+                    - fields: dicionário de textos
+                    - images: imagens em `state.photos`
+                    - image_categories: mapeia filename -> categoryId
+                    
+                    Para alterar posicionamento ou ordem, edite:
+                    1. `template_parser.py` = coordenadas dos campos
+                    2. `layout_engine.py` = fluxo e anchors
+                    3. `page_renderer.py` / `text_renderer.py` / `table_renderer.py`
+                       = renderização final
+                */
                 formData.append("extracted_fields", JSON.stringify(fieldsObj));
                 formData.append("template_name", "template novo v2.pdf");
                 formData.append("output_filename", `relatorio_tecnico_${fieldsObj.process_number || 'cbmerj'}.pdf`);
@@ -1205,7 +1305,7 @@
                 let count = 0;
                 for (const [catId, fileList] of Object.entries(state.photos)) {
                     fileList.forEach((photoObj, idx) => {
-                        // Create a file with a unique, sortable, clean name to guarantee order on backend
+                        // Renomeia para garantir ordem no backend
                         const extension = photoObj.file.name.substring(photoObj.file.name.lastIndexOf('.'));
                         const uniqueName = `${catId}_${idx}${extension}`;
                         const renamedFile = new File([photoObj.file], uniqueName, { type: photoObj.file.type });
@@ -1247,7 +1347,10 @@
             }
         });
 
-        // Initialize Form Event Listeners to sync live preview as user types
+        /* ==========================================================================
+           SYNC FORM -> STATE -> PREVIEW
+           Sempre que o usuário digitar algo, atualizamos preview em tempo real
+           ========================================================================== */
         fieldsForm.addEventListener('input', () => {
             const inputElements = fieldsForm.querySelectorAll('input, textarea');
             inputElements.forEach(inp => {
@@ -1256,7 +1359,10 @@
             updateLivePreview();
         });
 
-        // Render photo accordions list
+        /* ==========================================================================
+           PHOTO ACCORDIONS
+           Cria UI de upload por seção e mantém estado das imagens
+           ========================================================================== */
         function renderPhotoAccordions() {
             photoSectionsContainer.innerHTML = '';
             
@@ -1320,7 +1426,10 @@
             });
         }
 
-        // Render photo thumbnail grid inside an accordion
+        /* ==========================================================================
+           GRID DE THUMBNAILS
+           Renderiza miniaturas e controles de ordem/remoção por categoria
+           ========================================================================== */
         function renderImageGrid(catId) {
             const grid = document.getElementById(`grid-${catId}`);
             if (!grid) return;
@@ -1401,7 +1510,10 @@
             }
         }
 
-        // Upload and process PDF LE document
+        /* ==========================================================================
+           UPLOAD DE PDF
+           Envia PDFs para /api/extract e atualiza o formulário e preview
+           ========================================================================== */
         async function handlePDFUpload(files) {
             uploadProgressContainer.style.display = 'block';
             uploadProgressBar.style.width = '20%';
@@ -1485,7 +1597,10 @@
             }
         }
 
-        // Upload and process image file
+        /* ==========================================================================
+           UPLOAD DE IMAGENS
+           Alimenta `state.photos` e atualiza preview e grid
+           ========================================================================== */
         function handleImageUpload(catId, files) {
             Array.from(files).forEach(file => {
                 if (!file.type.startsWith('image/')) return;
@@ -1505,14 +1620,12 @@
             });
         }
 
-        // Remove image from collection
         function removeImage(catId, idx) {
             state.photos[catId].splice(idx, 1);
             renderImageGrid(catId);
             updateLivePreview();
         }
 
-        // Move image inside list
         function moveImage(catId, fromIdx, toIdx) {
             const list = state.photos[catId];
             if (toIdx < 0 || toIdx >= list.length) return;
@@ -1525,7 +1638,10 @@
             updateLivePreview();
         }
 
-        // Fetch template coordinate structure
+        /* ==========================================================================
+           LAYOUT DO TEMPLATE
+           Busca coordenadas de textos e placeholders de imagem
+           ========================================================================== */
         async function fetchTemplateLayout() {
             try {
                 const response = await fetch("/api/template-layout");
@@ -1538,7 +1654,10 @@
             }
         }
 
-        // Initial setup of layout preview pages list
+        /* ==========================================================================
+           INITIALIZE LIVE PREVIEW
+           Cria uma `.preview-page` por página do template e aplica fundo PNG
+           ========================================================================== */
         function initializeLivePreview() {
             if (!state.templateLayout || !state.templateLayout.success) return;
             
@@ -1553,6 +1672,7 @@
                 const innerPage = document.createElement('div');
                 innerPage.className = 'preview-page';
                 innerPage.id = `page-${i}`;
+                // PNGs de preview do template ficam em /static/template_pages/page_*.png
                 innerPage.style.backgroundImage = `url('/static/template_pages/page_${i}.png')`;
                 
                 const pageNum = document.createElement('div');
@@ -1567,7 +1687,15 @@
             updateLivePreview();
         }
 
-        // Calculate visual image layouts based on ImageLayoutEngine specifications
+        /* ==========================================================================
+           LAYOUT DE IMAGENS NO JAVASCRIPT
+           Calcula grade simples dentro de um placeholder do template.
+           
+           ALTERAR POSICIONAMENTO DE IMAGENS AQUI:
+           - `area_x0`, `area_x1`, `area_top`, `area_bottom` vêm do parser
+           - `MAX_CELL_WIDTH`, `MAX_CELL_HEIGHT` controlam tamanho das fotos
+           - overflow gera páginas extras no preview
+           ========================================================================== */
         function layoutImagesInJS(images, placeholder, startIdx) {
             const placed = [];
             const areaW = placeholder.area_x1 - placeholder.area_x0;
@@ -1689,15 +1817,21 @@
             return 1;
         }
 
-        // Live preview elements re-renderer
+        /* ==========================================================================
+           LIVE PREVIEW UPDATE
+           - Lê `state.templateLayout.text_fields` do backend
+           - Sobrepor textos usando aliases
+           - Posicionar imagens por `state.templateLayout.image_placeholders`
+           - Desenhar overflow pages
+           ========================================================================== */
         function updateLivePreview() {
             if (!state.templateLayout) return;
             
-            // 1. Clear dynamically created elements (overlays and overflow pages)
+            // 1. Clear dynamically created elements
             document.querySelectorAll('.text-overlay, .image-placeholder-overlay, .live-image-cell, .overflow-header').forEach(el => el.remove());
             document.querySelectorAll('.preview-page-wrapper.overflow-page').forEach(el => el.remove());
             
-            // 2. Map form text fields to template-native keys
+            // 2. Map form fields to template-native keys
             const aliasMap = {
                 "company_name": "proprietario",
                 "client_name": "proprietario",
@@ -1899,7 +2033,9 @@
             updatePreviewStyles();
         }
 
-        // Apply scale styles dynamically on size change
+        /* ==========================================================================
+           APLICA ESCALA NAS PÁGINAS DO PREVIEW
+           ========================================================================== */
         function updatePreviewStyles() {
             document.querySelectorAll('.preview-page-wrapper').forEach(wrapper => {
                 const inner = wrapper.querySelector('.preview-page');
@@ -1909,7 +2045,11 @@
             });
         }
 
-        // Load coordinate layout map and bootstrap UI
+        /* ==========================================================================
+           BOOT
+           - Carrega coordenadas do template
+           - Renderiza seções de fotos
+           ========================================================================== */
         window.addEventListener('load', () => {
             renderPhotoAccordions();
             fetchTemplateLayout();
