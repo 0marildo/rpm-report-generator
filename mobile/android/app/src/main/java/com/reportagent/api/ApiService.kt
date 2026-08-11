@@ -31,7 +31,7 @@ interface ApiService {
     @POST("/api/generate-report")
     suspend fun generate(
         @Part("extracted_fields") extractedFields: String,
-        @Part("template_name") templateName: String = "template novo v2.pdf",
+        @Part("template_name") templateName: String = "template final.pdf",
         @Part("output_filename") outputFilename: String = "report.pdf",
         @Part images: List<MultipartBody.Part>,
         @Part("image_categories") imageCategories: String = "{}",

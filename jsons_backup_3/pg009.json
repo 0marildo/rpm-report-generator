@@ -1,0 +1,30 @@
+{
+  "9": [
+    {
+      "category": "alarme",
+      "insert_rect": [
+        82.67,
+        449.29,
+        1142.67,
+        772.29
+      ],
+      "area_top": 449.29,
+      "area_bottom": 772.29,
+      "area_x0": 82.67,
+      "area_x1": 1142.67
+    },
+    {
+      "category": "sprinkler",
+      "insert_rect": [
+        105.67,
+        1081.63,
+        1153.67,
+        1215.63
+      ],
+      "area_top": 1081.63,
+      "area_bottom": 1215.63,
+      "area_x0": 105.67,
+      "area_x1": 1153.67
+    }
+  ]
+}

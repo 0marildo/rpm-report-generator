@@ -1,0 +1,30 @@
+{
+  "11": [
+    {
+      "category": "saida_emergencia",
+      "insert_rect": [
+        64.67,
+        392.29,
+        1180.67,
+        734.29
+      ],
+      "area_top": 392.29,
+      "area_bottom": 734.29,
+      "area_x0": 64.67,
+      "area_x1": 1180.67
+    },
+    {
+      "category": "visao_geral",
+      "insert_rect": [
+        24.67,
+        969.63,
+        1133.67,
+        1534.63
+      ],
+      "area_top": 969.63,
+      "area_bottom": 1534.63,
+      "area_x0": 24.67,
+      "area_x1": 1133.67
+    }
+  ]
+}

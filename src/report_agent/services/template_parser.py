@@ -8,7 +8,7 @@ import fitz
 TEMPLATES_DIR = Path(__file__).parent.parent.parent.parent / "templates"
 # The production template contains section instructions only; it no longer
 # embeds sample photographs that have to be removed during report generation.
-DEFAULT_TEMPLATE = "template novo v2.pdf"
+DEFAULT_TEMPLATE = "template final.pdf"
 
 PAGE_W = 595
 PAGE_H = 842
@@ -65,8 +65,6 @@ _PLACEHOLDER_RULES_RAW = [
     ("SINALIZAÇÕES", "sinalizacao"),
     ("ILUMINAÇÕES", "iluminacao_emergencia"),
     ("SAÍDAS DE EMERGÊNCIA", "saida_emergencia"),
-    ("GERADOR, EXAUSTÃO, GÁS, SPDA", "risco_especifico"),
-    ("PRESSURIZAÇÃO DE ESCADAS", "risco_especifico"),
     ("FACHADA", "fachada"),
     ("FOTOS OS DISPOSITIVOS DE MODO GERAL", "visao_geral"),
     ("FOTOS DO LOCAL", "visao_geral"),
@@ -209,6 +207,80 @@ def _parse_image_placeholders(page_num: int, blocks: list) -> dict[str, list[Ima
     return dict(placeholders)
 
 
+def _load_json_overrides(jsons_dir: str | None = None) -> dict[str, list[ImagePlaceholderDef]]:
+    """Load pg*.json files from jsons/ and return category -> [ImagePlaceholderDef,...].
+    
+    Each JSON maps 1-based page numbers to category entries with exact coordinates.
+    Coordinates are used as-specified; only missing/optional fields get defaults.
+    """
+    import json
+    from collections import defaultdict
+    
+    if jsons_dir is None:
+        jsons_dir = str(Path(__file__).resolve().parents[3].parent / "jsons")
+    
+    seen: set[tuple[str, int]] = set()
+    overrides: dict[str, list[ImagePlaceholderDef]] = defaultdict(list)
+    
+    # JSON coordinates are stored as 150 DPI pixels. Convert to PDF points.
+    DPI_NUM = 150.0
+    DPI_DEN = 72.0
+    SCALE = DPI_DEN / DPI_NUM
+    
+    path = Path(jsons_dir)
+    if not path.is_dir():
+        return dict(overrides)
+    
+    for json_file in sorted(path.glob("pg*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        
+        for page_str, entries in data.items():
+            try:
+                page_num = int(page_str) - 1
+            except ValueError:
+                continue
+            
+            for entry in entries:
+                cat = entry.get("category")
+                if not cat:
+                    continue
+                
+                rect = entry.get("insert_rect")
+                if not rect or len(rect) != 4:
+                    continue
+                
+                # Deduplicate: one placeholder per (category, page)
+                key = (cat, page_num)
+                if key in seen:
+                    continue
+                seen.add(key)
+                
+                # Convert all pixel coordinates to PDF points
+                x0, y0, x1, y1 = [float(v) * SCALE for v in rect]
+                
+                area_top = entry.get("area_top")
+                area_bottom = entry.get("area_bottom")
+                area_x0 = entry.get("area_x0")
+                area_x1 = entry.get("area_x1")
+                
+                overrides[cat].append(ImagePlaceholderDef(
+                    page=page_num,
+                    category=cat,
+                    insert_text=entry.get("insert_text", f"INSERIR {cat.upper()}"),
+                    insert_rect=(x0, y0, x1, y1),
+                    area_top=float(area_top) * SCALE if area_top is not None else y0,
+                    area_bottom=float(area_bottom) * SCALE if area_bottom is not None else (PAGE_H - 60),
+                    area_x0=float(area_x0) * SCALE if area_x0 is not None else MARGIN_X,
+                    area_x1=float(area_x1) * SCALE if area_x1 is not None else (PAGE_W - MARGIN_RIGHT),
+                ))
+    
+    return dict(overrides)
+
+
 def parse_template(template_path: str | None = None) -> TemplateDef:
     if template_path is None:
         template_path = str(TEMPLATES_DIR / DEFAULT_TEMPLATE)
@@ -221,6 +293,12 @@ def parse_template(template_path: str | None = None) -> TemplateDef:
 
         tpl.text_fields.update(_parse_text_fields(pg, blocks))
         tpl.image_placeholders.update(_parse_image_placeholders(pg, blocks))
+
+    # Apply coordinate overrides from jsons/pg*.json if present.
+    json_overrides = _load_json_overrides()
+    if json_overrides:
+        for cat, ph_list in json_overrides.items():
+            tpl.image_placeholders[cat] = ph_list
 
     doc.close()
     return tpl

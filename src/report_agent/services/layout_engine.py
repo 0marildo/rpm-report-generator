@@ -129,23 +129,54 @@ class LayoutEngine:
             if not remaining:
                 continue
             page_index = anchor.page + inserted
+            ph = None
+            if page_index < doc.page_count:
+                ph_list = self.tpl.image_placeholders.get(anchor.category, [])
+                ph = next((p for p in ph_list if p.page == anchor.page), None)
+            
+            # Use exact insert_rect coordinates from JSON when available
+            if ph is not None and ph.insert_rect is not None:
+                rect = fitz.Rect(*ph.insert_rect)
+                for idx, img in enumerate(remaining):
+                    if page_index >= doc.page_count:
+                        break
+                    page = doc[page_index]
+                    img_data = img.get("data") or img.get("path")
+                    if isinstance(img_data, bytes):
+                        page.insert_image(rect, stream=img_data, keep_proportion=True)
+                    else:
+                        page.insert_image(rect, filename=img_data, keep_proportion=True)
+                    page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
+                    caption = f"Figura {figure + idx} – {self._get_category_title(anchor.category)}."
+                    caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
+                    caption_y = rect.y1 + 2
+                    if caption_y < PAGE_H - MARGIN_B - 14:
+                        page.insert_text(fitz.Point(rect.x0 + (rect.x1 - rect.x0) / 2 - caption_width / 2, caption_y), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
+                figure += len(remaining)
+                continue
+            
+            # Fallback to flow layout for sections without exact coordinates
             if page_index >= doc.page_count:
                 page_index = self._new_continuation_page(doc, doc.page_count, anchor.category)
                 inserted += 1
                 cursor_y = CONTINUATION_CURSOR_Y
                 page_limit = printable_bottom
+                flow_x = MARGIN_L
+                flow_width = PAGE_W - MARGIN_L - MARGIN_R
                 continuation = True
             else:
                 cursor_y = max(MARGIN_T, anchor.cursor_y)
                 page_limit = min(printable_bottom, anchor.flow_bottom or printable_bottom)
+                flow_x = MARGIN_L
+                flow_width = PAGE_W - MARGIN_L - MARGIN_R
                 continuation = False
 
             while remaining:
                 layout = self.image_layout_engine.solve(
                     remaining,
-                    x=MARGIN_L,
+                    x=flow_x,
                     y=cursor_y,
-                    width=PAGE_W - MARGIN_L - MARGIN_R,
+                    width=flow_width,
                     height=page_limit - cursor_y,
                     require_full_width=not continuation,
                 )
@@ -155,6 +186,8 @@ class LayoutEngine:
                     inserted += 1
                     cursor_y = CONTINUATION_CURSOR_Y
                     page_limit = printable_bottom
+                    flow_x = MARGIN_L
+                    flow_width = PAGE_W - MARGIN_L - MARGIN_R
                     continuation = True
                     continue
                 self._render_grid(doc[page_index], layout, figure, anchor.category)
@@ -166,6 +199,8 @@ class LayoutEngine:
                     inserted += 1
                     cursor_y = CONTINUATION_CURSOR_Y
                     page_limit = printable_bottom
+                    flow_x = MARGIN_L
+                    flow_width = PAGE_W - MARGIN_L - MARGIN_R
                     continuation = True
 
     def _new_continuation_page(self, doc: fitz.Document, position: int, category: str) -> int:

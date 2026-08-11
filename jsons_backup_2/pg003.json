@@ -1,0 +1,30 @@
+{
+  "3": [
+    {
+      "category": "le_print",
+      "insert_rect": [
+        114.67,
+        440.63,
+        1122.67,
+        787.63
+      ],
+      "area_top": 440.63,
+      "area_bottom": 787.63,
+      "area_x0": 114.67,
+      "area_x1": 1122.67
+    },
+    {
+      "category": "extintor",
+      "insert_rect": [
+        66.67,
+        1359.96,
+        1141.67,
+        1589.96
+      ],
+      "area_top": 1359.96,
+      "area_bottom": 1589.96,
+      "area_x0": 66.67,
+      "area_x1": 1141.67
+    }
+  ]
+}

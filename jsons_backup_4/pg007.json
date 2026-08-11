@@ -1,0 +1,17 @@
+{
+  "7": [
+    {
+      "category": "bomba_placa",
+      "insert_rect": [
+        88.67,
+        358.29,
+        1135.67,
+        779.29
+      ],
+      "area_top": 358.29,
+      "area_bottom": 779.29,
+      "area_x0": 88.67,
+      "area_x1": 1135.67
+    }
+  ]
+}

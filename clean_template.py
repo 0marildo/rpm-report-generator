@@ -7,9 +7,9 @@ import shutil
 from PIL import Image
 import io
 
-src = Path('/home/hamzaelnajmi/report-agent/templates/template novo v2.pdf')
-out = Path('/home/hamzaelnajmi/report-agent/templates/template novo v2.pdf')
-tmp = Path('/home/hamzaelnajmi/report-agent/templates/template novo v2_cover.pdf')
+src = Path('/home/hamzaelnajmi/report-agent/templates/template final.pdf')
+out = Path('/home/hamzaelnajmi/report-agent/templates/template final.pdf')
+tmp = Path('/home/hamzaelnajmi/report-agent/templates/template final_cover.pdf')
 
 if not src.exists():
     print('ERROR: source template missing')

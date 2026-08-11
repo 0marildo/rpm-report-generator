@@ -1,0 +1,17 @@
+{
+  "6": [
+    {
+      "category": "hidrante_caixa",
+      "insert_rect": [
+        58.67,
+        1055.29,
+        1171.67,
+        1564.29
+      ],
+      "area_top": 1055.29,
+      "area_bottom": 1564.29,
+      "area_x0": 58.67,
+      "area_x1": 1171.67
+    }
+  ]
+}

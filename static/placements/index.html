@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Template Image Placeholder Editor - template final.pdf</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Inter, Outfit, system-ui, sans-serif; background: #f4f5f7; color: #1f2937; padding: 24px; }
+  h1 { font-size: 18px; margin-bottom: 8px; }
+  .hint { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+  .panel h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #6b7280; margin-bottom: 10px; }
+  .page-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .page-nav button { padding: 6px 10px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .page-nav button.active { background: #111827; color: #fff; border-color: #111827; }
+  .canvas-wrap { position: relative; overflow: auto; border: 1px solid #e5e7eb; background: #e5e7eb; border-radius: 8px; }
+  canvas { display: block; background: #fff; cursor: crosshair; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .field input, .field select, .field textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
+  .list { max-height: 260px; overflow-y: auto; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 6px; background: #fafafa; }
+  .item .meta { font-size: 12px; color: #374151; }
+  .item .actions { display: flex; gap: 6px; }
+  .item button { padding: 4px 8px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .item button.danger { color: #dc2626; border-color: #fca5a5; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .actions-bottom { margin-top: 10px; display: flex; gap: 8px; }
+  .actions-bottom button { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .primary { background: #111827; color: #fff; }
+  .secondary { background: #fff; color: #111827; border: 1px solid #d1d5db; }
+  .status { margin-top: 8px; font-size: 12px; color: #374151; min-height: 16px; }
+</style>
+</head>
+<body>
+  <h1>Posicionador de Imagens - template final.pdf</h1>
+  <div class="hint">Clique e arraste na página para criar caixas de imagem. Use o painel para nomear categorias e exportar coordenadas.</div>
+  <div class="layout">
+    <div class="panel">
+      <h2>Página</h2>
+      <div class="page-nav" id="pageNav"></div>
+      <div class="field">
+        <label>Zoom</label>
+        <input type="range" id="zoom" min="0.5" max="3" step="0.1" value="1">
+      </div>
+      <h2>Nova seleção</h2>
+      <div class="field">
+        <label>Categoria</label>
+        <select id="category">
+          <option value="le_print">LE Print</option>
+          <option value="extintor">Extintor</option>
+          <option value="hidrante_recalque">HR</option>
+          <option value="hidrante_urbano">HU</option>
+          <option value="hidrante_caixa">Caixa mangueira</option>
+          <option value="cmi">CMI</option>
+          <option value="bomba_placa">Placa bomba</option>
+          <option value="curva_bomba">Curva</option>
+          <option value="alarme">Alarme</option>
+          <option value="sprinkler">Sprinkler</option>
+          <option value="sinalizacao">Sinalização</option>
+          <option value="iluminacao_emergencia">Iluminação</option>
+          <option value="saida_emergencia">Saída</option>
+          <option value="risco_especifico">Risco específico</option>
+          <option value="fachada">Fachada</option>
+          <option value="visao_geral">Visão geral</option>
+          <option value="fotos_gerais">Fotos gerais</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Texto / Nome</label>
+        <input type="text" id="boxName" placeholder="Ex: print do LE página 2">
+      </div>
+      <div class="actions-bottom">
+        <button class="primary" id="exportBtn">Exportar JSON</button>
+        <button class="secondary" id="clearBtn">Limpar página</button>
+      </div>
+      <div class="status" id="status"></div>
+      <h2 style="margin-top:14px;">Caixas na página</h2>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+<script>
+const BASE = '/static/template_pages';
+const PAGE_COUNT = 12;
+const PDF_W = 595;
+const PDF_H = 842;
+const DPR = window.devicePixelRatio || 1;
+
+const state = {
+  page: 0,
+  zoom: 1,
+  boxes: {}, // pageIndex -> []
+  drawing: false,
+  start: null,
+  current: null,
+  selectedId: null
+};
+const catLabels = {
+  le_print: 'LE Print', extintor: 'Extintor', hidrante_recalque: 'HR', hidrante_urbano: 'HU',
+  hidrante_caixa: 'Caixa mangueira', cmi: 'CMI', bomba_placa: 'Placa bomba', curva_bomba: 'Curva',
+  alarme: 'Alarme', sprinkler: 'Sprinkler', sinalizacao: 'Sinalização', iluminacao_emergencia: 'Iluminação',
+  saida_emergencia: 'Saída', risco_especifico: 'Risco específico', fachada: 'Fachada',
+  visao_geral: 'Visão geral', fotos_gerais: 'Fotos gerais'
+};
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const listEl = document.getElementById('list');
+
+function imgForPage(i) {
+  return `${BASE}/page_${i}.png`;
+}
+
+function toPdfRect(rect) {
+  const z = state.zoom;
+  return {
+    x0: +(rect.x0 / z).toFixed(2),
+    y0: +(rect.y0 / z).toFixed(2),
+    x1: +(rect.x1 / z).toFixed(2),
+    y1: +(rect.y1 / z).toFixed(2),
+  };
+}
+
+function fromPdfRect(r) {
+  const z = state.zoom;
+  return {
+    x0: r.x0 * z, y0: r.y0 * z,
+    x1: r.x1 * z, y1: r.y1 * z,
+  };
+}
+
+function setStatus(msg) { statusEl.textContent = msg || ''; }
+
+function render() {
+  const img = new Image();
+  img.onload = () => {
+    const z = state.zoom;
+    canvas.width = img.width * z;
+    canvas.height = img.height * z;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    drawBoxes();
+  };
+  img.src = imgForPage(state.page);
+}
+
+function drawBoxes() {
+  const boxes = state.boxes[state.page] || [];
+  boxes.forEach(b => {
+    const r = fromPdfRect(b.rect);
+    ctx.strokeStyle = b.id === state.selectedId ? '#2563eb' : '#dc2626';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+    ctx.fillStyle = 'rgba(220, 38, 38, 0.12)';
+    ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+    const label = `${catLabels[b.category] || b.category}${b.name ? ' - ' + b.name : ''}`;
+    ctx.fillStyle = '#111827';
+    ctx.font = '12px Inter, system-ui';
+    const tw = ctx.measureText(label).width + 10;
+    ctx.fillRect(r.x0, r.y0 - 18, tw, 18);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, r.x0 + 5, r.y0 - 5);
+  });
+  if (state.drawing && state.start && state.current) {
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(state.start.x, state.start.y, state.current.x - state.start.x, state.current.y - state.start.y);
+    ctx.setLineDash([]);
+  }
+}
+
+function buildList() {
+  const boxes = state.boxes[state.page] || [];
+  listEl.innerHTML = '';
+  boxes.forEach((b, idx) => {
+    const r = b.rect;
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `
+      <div class="meta">
+        <strong>${catLabels[b.category] || b.category}</strong><br>
+        <span style="color:#6b7280">x=${r.x0} y=${r.y0} → x=${r.x1} y=${r.y1}</span>
+        ${b.name ? '<br><span>' + escHtml(b.name) + '</span>' : ''}
+      </div>
+      <div class="actions">
+        <button data-act="focus">Foco</button>
+        <button class="danger" data-act="del">Excluir</button>
+      </div>
+    `;
+    el.querySelector('[data-act="focus"]').addEventListener('click', () => { state.selectedId = b.id; drawBoxes(); });
+    el.querySelector('[data-act="del"]').addEventListener('click', () => { state.boxes[state.page] = boxes.filter(x => x.id !== b.id); buildList(); drawBoxes(); });
+    listEl.appendChild(el);
+  });
+}
+
+function escHtml(s) { return s.replace(/[&<>"]+/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function genId() { return 'b' + Math.random().toString(36).slice(2, 8); }
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+function onStart(e) {
+  e.preventDefault();
+  state.drawing = true;
+  state.start = getPos(e);
+  state.current = state.start;
+}
+function onMove(e) {
+  if (!state.drawing) return;
+  e.preventDefault();
+  state.current = getPos(e);
+  drawBoxes();
+}
+function onEnd(e) {
+  if (!state.drawing) return;
+  state.drawing = false;
+  if (!state.start || !state.current) return;
+  const x0 = Math.min(state.start.x, state.current.x);
+  const y0 = Math.min(state.start.y, state.current.y);
+  const x1 = Math.max(state.start.x, state.current.x);
+  const y1 = Math.max(state.start.y, state.current.y);
+  if (x1 - x0 < 8 || y1 - y0 < 8) { state.start = null; state.current = null; drawBoxes(); return; }
+  const pdfRect = toPdfRect({ x0, y0, x1, y1 });
+  const id = genId();
+  state.boxes[state.page] = state.boxes[state.page] || [];
+  state.boxes[state.page].push({
+    id, page: state.page, category: document.getElementById('category').value,
+    name: document.getElementById('boxName').value || '', rect: pdfRect
+  });
+  state.selectedId = id;
+  state.start = null;
+  state.current = null;
+  buildList();
+  drawBoxes();
+  setStatus(`Caixa criada na página ${state.page + 1}`);
+}
+
+canvas.addEventListener('mousedown', onStart);
+canvas.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onEnd);
+canvas.addEventListener('touchstart', onStart, { passive: false });
+canvas.addEventListener('touchmove', onMove, { passive: false });
+window.addEventListener('touchend', onEnd);
+
+function buildNav() {
+  const nav = document.getElementById('pageNav');
+  nav.innerHTML = '';
+  for (let i = 0; i < PAGE_COUNT; i++) {
+    const btn = document.createElement('button');
+    btn.textContent = i + 1;
+    if (i === state.page) btn.classList.add('active');
+    btn.addEventListener('click', () => { state.page = i; state.selectedId = null; buildNav(); render(); buildList(); setStatus(`Página ${i + 1}`); });
+    nav.appendChild(btn);
+  }
+}
+
+document.getElementById('zoom').addEventListener('input', (e) => {
+  state.zoom = parseFloat(e.target.value);
+  render();
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Limpar todas as caixas desta página?')) return;
+  state.boxes[state.page] = [];
+  state.selectedId = null;
+  buildList();
+  drawBoxes();
+  setStatus('Página limpa');
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const out = {};
+  for (const [page, boxes] of Object.entries(state.boxes)) {
+    if (!boxes.length) continue;
+    out[page] = boxes.map(b => ({
+      category: b.category, name: b.name || null, insert_rect: [b.rect.x0, b.rect.y0, b.rect.x1, b.rect.y1],
+      area_top: Math.min(b.rect.y0, b.rect.y1), area_bottom: Math.max(b.rect.y0, b.rect.y1),
+      area_x0: Math.min(b.rect.x0, b.rect.x1), area_x1: Math.max(b.rect.x0, b.rect.x1)
+    }));
+  }
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'template-final-image-placeholders.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setStatus('JSON exportado');
+});
+
+buildNav();
+render();
+buildList();
+setStatus(`Template: template final.pdf | Páginas: ${PAGE_COUNT}`);
+</script>
+</body>
+</html>
