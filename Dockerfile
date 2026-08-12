@@ -18,6 +18,7 @@ COPY pyproject.toml run_api.py ./
 COPY src ./src
 COPY templates ./templates
 COPY static ./static
+COPY jsons ./jsons
 
 # Cloud Run runs the image as an unprivileged user. The application writes
 # temporary uploads and reports under /tmp, which remains writable.
