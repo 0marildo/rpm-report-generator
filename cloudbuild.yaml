@@ -2,6 +2,12 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'auth'
+      - 'configure-docker'
+      - 'southamerica-east1-docker.pkg.dev'
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
