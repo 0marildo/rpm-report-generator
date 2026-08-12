@@ -2,28 +2,8 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'auth'
-      - 'configure-docker'
-      - 'southamerica-east1-docker.pkg.dev'
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - 'southamerica-east1-docker.pkg.dev/${PROJECT_ID}/report-agent:latest'
-      - '.'
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'southamerica-east1-docker.pkg.dev/${PROJECT_ID}/report-agent:latest']
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'siterpmreport'
-      - '--image=southamerica-east1-docker.pkg.dev/${PROJECT_ID}/report-agent:latest'
-      - '--region=southamerica-east1'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
-      - '--port=8080'
+    args: ['build', '-t', 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent:latest', '.']
+
+images:
+  - 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent:latest'
