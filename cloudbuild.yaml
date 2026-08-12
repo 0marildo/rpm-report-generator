@@ -3,7 +3,7 @@ options:
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent:latest', '.']
+    args: ['build', '-t', 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent/report-agent:latest', '.']
 
 images:
-  - 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent:latest'
+  - 'southamerica-east1-docker.pkg.dev/project-6ce05f8d-7a09-4456-849/report-agent/report-agent:latest'
