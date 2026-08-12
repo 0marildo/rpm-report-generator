@@ -217,7 +217,14 @@ def _load_json_overrides(jsons_dir: str | None = None) -> dict[str, list[ImagePl
     from collections import defaultdict
     
     if jsons_dir is None:
-        jsons_dir = str(Path(__file__).resolve().parents[3].parent / "jsons")
+        # Parser file: /app/src/report_agent/services/template_parser.py
+        # parents[3] = /app, so /app/jsons is the expected location.
+        candidates = [
+            Path(__file__).resolve().parents[3] / "jsons",
+            Path.cwd() / "jsons",
+            Path("/app/jsons"),
+        ]
+        jsons_dir = next((str(c) for c in candidates if Path(c).is_dir()), str(candidates[0]))
     
     seen: set[tuple[str, int]] = set()
     overrides: dict[str, list[ImagePlaceholderDef]] = defaultdict(list)
