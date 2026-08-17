@@ -651,8 +651,6 @@
             transform-origin: top center;
             flex-shrink: 0;
             overflow: visible;
-            width: 595px;
-            height: 842px;
         }
 
         .preview-page {
@@ -663,7 +661,6 @@
             background-size: 100% 100%;
             background-repeat: no-repeat;
             background-color: white;
-            transform-origin: top left;
         }
 
         .preview-page-num {
@@ -1712,14 +1709,14 @@
             const n = images.length;
             if (n === 0) return { placed: [], overflowPages: [] };
             
-            const cols = n <= 3 ? n : 3;
+            const cols = n > 1 ? 2 : 1;
             const rows = Math.ceil(n / cols);
             
             // Get max fit count for the template slot
             const maxSlotCount = getMaxImagesInArea(areaW, areaH, n, PADDING, CAPTION_RESERVE, 80);
             const slotCount = Math.min(n, maxSlotCount);
             
-            const slotCols = slotCount <= 3 ? slotCount : 3;
+            const slotCols = slotCount > 1 ? 2 : 1;
             const slotRows = Math.ceil(slotCount / slotCols);
             
             const baseCellW = (areaW - (slotCols + 1) * PADDING) / slotCols;
@@ -1766,7 +1763,7 @@
                 const batchCount = Math.min(remaining.length, maxO);
                 const batch = remaining.splice(0, batchCount);
                 
-                const colsO = batchCount <= 3 ? batchCount : 3;
+                const colsO = batchCount > 1 ? 2 : 1;
                 const rowsO = Math.ceil(batchCount / colsO);
                 
                 const baseCellWO = (usableW_O - (colsO + 1) * PADDING) / colsO;
@@ -1810,7 +1807,7 @@
         // Get max row capacities in area
         function getMaxImagesInArea(width, height, count, padding, captionReserve, minCellH) {
             for (let tryN = count; tryN > 0; tryN--) {
-                const cols = tryN <= 3 ? tryN : 3;
+                const cols = tryN > 1 ? 2 : 1;
                 const rows = Math.ceil(tryN / cols);
                 const rowH = (height - (rows + 1) * padding) / rows;
                 if (rowH >= minCellH) {

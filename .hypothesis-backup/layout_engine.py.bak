@@ -134,24 +134,25 @@ class LayoutEngine:
                 ph_list = self.tpl.image_placeholders.get(anchor.category, [])
                 ph = next((p for p in ph_list if p.page == anchor.page), None)
             
-            # Use exact insert_rect coordinates from JSON when available,
-            # but only for a single image.  For multiple images, fall back to
-            # flow layout so they can paginate instead of overlapping.
-            if ph is not None and ph.insert_rect is not None and len(remaining) == 1:
+            # Use exact insert_rect coordinates from JSON when available
+            if ph is not None and ph.insert_rect is not None:
                 rect = fitz.Rect(*ph.insert_rect)
-                page = doc[page_index]
-                img_data = remaining[0].get("data") or remaining[0].get("path")
-                if isinstance(img_data, bytes):
-                    page.insert_image(rect, stream=img_data, keep_proportion=True)
-                else:
-                    page.insert_image(rect, filename=img_data, keep_proportion=True)
-                page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
-                caption = f"Figura {figure} – {self._get_category_title(anchor.category)}."
-                caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
-                caption_y = rect.y1 + 2
-                if caption_y < PAGE_H - MARGIN_B - 14:
-                    page.insert_text(fitz.Point(rect.x0 + (rect.x1 - rect.x0) / 2 - caption_width / 2, caption_y), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
-                figure += 1
+                for idx, img in enumerate(remaining):
+                    if page_index >= doc.page_count:
+                        break
+                    page = doc[page_index]
+                    img_data = img.get("data") or img.get("path")
+                    if isinstance(img_data, bytes):
+                        page.insert_image(rect, stream=img_data, keep_proportion=True)
+                    else:
+                        page.insert_image(rect, filename=img_data, keep_proportion=True)
+                    page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
+                    caption = f"Figura {figure + idx} – {self._get_category_title(anchor.category)}."
+                    caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
+                    caption_y = rect.y1 + 2
+                    if caption_y < PAGE_H - MARGIN_B - 14:
+                        page.insert_text(fitz.Point(rect.x0 + (rect.x1 - rect.x0) / 2 - caption_width / 2, caption_y), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
+                figure += len(remaining)
                 continue
             
             # Fallback to flow layout for sections without exact coordinates

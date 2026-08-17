@@ -20,7 +20,7 @@ CAPTION_HEIGHT = 14.0
 CAPTION_GAP = 4.0
 CAPTION_RESERVE = CAPTION_HEIGHT + CAPTION_GAP
 SINGLE_IMAGE_WIDTH_RATIO = 0.90
-MAX_IMAGES_PER_PAGE = 9
+MAX_IMAGES_PER_PAGE = 4
 
 
 @dataclass(frozen=True)
@@ -145,12 +145,13 @@ class ImageLayoutEngine:
 
     @staticmethod
     def _grid_shape(count: int) -> tuple[int, int]:
-        # Always use a 3x3 grid for up to 9 images.
-        if count <= 3:
-            return count, 1
-        if count <= 6:
-            return 3, 2
-        return 3, 3
+        # Explicit compositions keep the visual result stable and intentional.
+        if count == 1:
+            return 1, 1
+        if count == 2:
+            return 2, 1
+        # Three uses a centered final item; four is a symmetric 2x2.
+        return 2, 2
 
     @staticmethod
     def _aspect(source: bytes | str | None) -> float:
