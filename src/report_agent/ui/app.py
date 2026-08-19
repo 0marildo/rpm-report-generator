@@ -231,14 +231,81 @@ def create_app() -> gr.Blocks:
             elem_classes=["generate-btn"],
         )
         gen_status = gr.Textbox(label="Generation Status", interactive=False)
-        gen_output = gr.File(label="Download Report")
+        preview_gallery = gr.Gallery(label="Report Preview", visible=False, columns=1, height=720)
+        preview_actions = gr.Row(visible=False)
+        with preview_actions:
+            approve_btn = gr.Button("Approve & Download", variant="primary")
+            regenerate_btn = gr.Button("Regenerate", variant="secondary")
+        gen_output = gr.File(label="Download Report", visible=False)
+
+        state = gr.State({"approved": False, "preview_urls": [], "path": ""})
+
+        def generate_with_preview(*inputs):
+            status, out_path = handle_generate_with_images(*inputs)
+            if not out_path or not isinstance(out_path, str) or not os.path.exists(out_path):
+                return (
+                    status,
+                    gr.update(value=None, visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    {"approved": False, "preview_urls": [], "path": ""},
+                )
+            from urllib.parse import quote
+            download_url = f"/download-report?path={quote(out_path)}&filename=technical_report.pdf"
+            import fitz
+            preview_dir = os.path.join(tempfile.gettempdir(), "report-agent", "previews")
+            os.makedirs(preview_dir, exist_ok=True)
+            doc = fitz.open(out_path)
+            pages = []
+            for i in range(len(doc)):
+                pix = doc[i].get_pixmap(dpi=150)
+                path = os.path.join(preview_dir, f"preview_{i}.png")
+                pix.save(path)
+                pages.append(path)
+            doc.close()
+            return (
+                status,
+                gr.update(value=pages, visible=True),
+                gr.update(visible=True),
+                gr.update(visible=True),
+                download_url,
+                {"approved": False, "preview_urls": pages, "path": out_path},
+            )
+
+        def approve_download(state):
+            path = state.get("path", "") if isinstance(state, dict) else ""
+            if not path or not os.path.exists(path):
+                return (
+                    gr.update(value=None, visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    {"approved": False, "preview_urls": [], "path": ""},
+                    "Report not found. Please generate again.",
+                )
+            return (
+                gr.update(value=None, visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                path,
+                {"approved": True, "preview_urls": [], "path": path},
+                "Report approved. Use the file component below to download.",
+            )
 
         all_inputs = [pdf_upload] + textbox_list + file_list
 
         generate_btn.click(
-            fn=handle_generate_with_images,
+            fn=generate_with_preview,
             inputs=all_inputs,
-            outputs=[gen_status, gen_output],
+            outputs=[gen_status, preview_gallery, preview_actions, gen_output, state],
+        )
+        approve_btn.click(
+            fn=approve_download,
+            inputs=[state],
+            outputs=[preview_gallery, preview_actions, gen_output, preview_actions, gen_output, state, gen_status],
         )
 
     return app

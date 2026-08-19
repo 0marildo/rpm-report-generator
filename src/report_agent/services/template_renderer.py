@@ -1,11 +1,11 @@
-"""Template-aware PDF renderer.
+"""Template-aware PDF renderer with explicit image injection and post-render preview."""
 
-Fills text fields and places images into the production template using
-dynamically discovered field positions and image placeholder zones.
-"""
+from __future__ import annotations
 
 import logging
-from collections import defaultdict
+import os
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 import fitz
@@ -18,43 +18,12 @@ from .template_parser import (
     PAGE_W,
     PAGE_H,
 )
-from .image_layout_engine import (
-    ImageLayoutEngine,
-    draw_images_on_page,
-    create_image_page,
-    SECTION_TITLE_SIZE,
-    SECTION_TITLE_GAP,
-    MARGIN_L,
-    MARGIN_T,
-    MARGIN_R,
-    MARGIN_B,
-)
+from ..layout import ImageSlot, compute_image_layout_constraints, ImageLayoutError
 
 logger = logging.getLogger(__name__)
 
 TEXT_DARK = (0.15, 0.15, 0.15)
-
-SECTION_LABELS = {
-    "le_print": "LAUDO DE EXIGÊNCIAS",
-    "extintor": "EXTINTORES",
-    "hidrante_recalque": "HIDRANTE DE RECALQUE",
-    "hidrante_urbano": "HIDRANTE URBANO",
-    "hidrante_caixa": "CAIXAS DE MANGUEIRA",
-    "cmi": "CASA DE MÁQUINAS DE INCÊNDIO",
-    "cmi_exterior": "CASA DE MÁQUINAS DE INCÊNDIO",
-    "cmi_interior": "CASA DE MÁQUINAS DE INCÊNDIO",
-    "bomba_placa": "BOMBAS DE INCÊNDIO",
-    "curva_bomba": "CURVA DA BOMBA",
-    "alarme": "ALARME DE INCÊNDIO",
-    "sprinkler": "SPRINKLERS",
-    "sinalizacao": "SINALIZAÇÃO DE SEGURANÇA",
-    "iluminacao_emergencia": "ILUMINAÇÃO DE EMERGÊNCIA",
-    "saida_emergencia": "SAÍDAS DE EMERGÊNCIA",
-    "risco_especifico": "RISCOS ESPECÍFICOS",
-    "fachada": "FACHADA",
-    "visao_geral": "VISÃO GERAL",
-    "fotos_gerais": "FOTOS DE INSPEÇÃO",
-}
+BACKGROUND_KEEP_MIN_SIZE = 580.0
 
 
 class TemplateRenderer:
@@ -69,53 +38,103 @@ class TemplateRenderer:
         image_sections: dict[str, list[dict]],
     ) -> str:
         doc = fitz.open(self.template_path)
-
-        # First, cover all template placeholders (example photos and text instructions)
         self._clear_template_placeholders(doc)
-
         self._fill_text_fields(doc, fields)
         self._place_images(doc, image_sections)
-
         doc.save(output_path, garbage=4, deflate=True)
         doc.close()
         logger.info("Report saved to %s", output_path)
         return output_path
 
+    def render_preview(
+        self,
+        fields: dict[str, str],
+        image_sections: dict[str, list[dict]],
+        preview_page: int = 0,
+    ) -> str:
+        preview_path = os.path.join(tempfile.gettempdir(), "report-agent", "preview.pdf")
+        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+        out = self.render(preview_path, fields, image_sections)
+        return out
+
     def _clear_template_placeholders(self, doc: fitz.Document) -> None:
-        # 1. Cover all parsed image placeholders' areas and text blocks in the template
+        # Preserve background images separately so we can re-lock them.
+        background_images: dict[int, list[dict]] = {}
         for cat, ph_list in self.tpl.image_placeholders.items():
             for ph in ph_list:
-                if ph.page < doc.page_count:
-                    page = doc[ph.page]
-                    # Cover insert instruction text
-                    ir = fitz.Rect(ph.insert_rect)
-                    page.draw_rect(ir, color=(1, 1, 1), fill=(1, 1, 1), width=0)
-                    
-                    # Cover the entire placeholder slot area
-                    sr = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
-                    page.draw_rect(sr, color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                if ph.page >= doc.page_count:
+                    continue
+                page = doc[ph.page]
+                page.draw_rect(fitz.Rect(ph.insert_rect), color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                page.draw_rect(
+                    fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom),
+                    color=(1, 1, 1),
+                    fill=(1, 1, 1),
+                    width=0,
+                )
 
-        # 2. Cover any remaining embedded placeholder images (anything other than background xref=9 on target pages)
-        target_pages = [2, 3, 4, 6, 8, 9] # pages 3, 4, 5, 7, 9, 10
-        for pg_idx in target_pages:
+        for pg_idx in range(doc.page_count):
+            page = doc[pg_idx]
+            bg_candidates = []
+            for info in page.get_image_info():
+                bbox = info.get("bbox")
+                if not bbox:
+                    continue
+                x0, y0, x1, y1 = bbox
+                w = x1 - x0
+                h = y1 - y0
+                if w > BACKGROUND_KEEP_MIN_SIZE and h > BACKGROUND_KEEP_MIN_SIZE:
+                    xref = None
+                    image_data = None
+                    for img in page.get_images():
+                        for img_info in page.get_image_info():
+                            info_bbox = img_info.get("bbox")
+                            if not info_bbox:
+                                continue
+                            if (
+                                abs(info_bbox[0] - x0) < 1e-3
+                                and abs(info_bbox[1] - y0) < 1e-3
+                                and abs(info_bbox[2] - x1) < 1e-3
+                                and abs(info_bbox[3] - y1) < 1e-3
+                            ):
+                                xref = img[0]
+                                break
+                        if xref is not None:
+                            break
+                    if xref is not None:
+                        try:
+                            image_data = page.extract_image(xref)
+                        except Exception:
+                            image_data = None
+                    bg_candidates.append(
+                        {
+                            "bbox": fitz.Rect(x0, y0, x1, y1),
+                            "xref": xref,
+                            "image_data": image_data.get("image") if isinstance(image_data, dict) else None,
+                        }
+                    )
+            if bg_candidates:
+                background_images[pg_idx] = bg_candidates
+
+        self._background_images = background_images
+
+    def _apply_locked_backgrounds(self, doc: fitz.Document) -> None:
+        """Re-insert template backgrounds as locked images."""
+        for pg_idx, images in getattr(self, "_background_images", {}).items():
             if pg_idx >= doc.page_count:
                 continue
             page = doc[pg_idx]
-            image_info = page.get_image_info()
-            for info in image_info:
-                bbox = info.get('bbox')
-                if bbox:
-                    x0, y0, x1, y1 = bbox
-                    w = x1 - x0
-                    h = y1 - y0
-                    # Keep full-page background artwork and cover sample images
-                    if not (w > 580 and h > 800):
-                        rect = fitz.Rect(x0, y0, x1, y1)
-                        rect.x0 -= 2
-                        rect.y0 -= 2
-                        rect.x1 += 2
-                        rect.y1 += 2
-                        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1), width=0)
+            for bg in images:
+                try:
+                    xref = page.add_redact_annot(bg["bbox"])
+                    page.apply_redactions()
+                    continue
+                except Exception:
+                    pass
+                try:
+                    page.draw_rect(bg["bbox"], color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                except Exception:
+                    pass
 
     def _fill_text_fields(self, doc: fitz.Document, fields: dict[str, str]) -> None:
         resolved_fields = {}
@@ -167,42 +186,64 @@ class TemplateRenderer:
             )
 
     def _place_images(self, doc: fitz.Document, image_sections: dict[str, list[dict]]) -> None:
-        engine = ImageLayoutEngine()
-        overflow_pages: dict[int, list[tuple[str, list]]] = {}
-        idx_counter = 1
+        placed_all: list[tuple[int, fitz.Rect, bytes, str]] = []
+
+        POINTS_PER_PIXEL = 72.0 / 96.0
+        AREA_WIDTH_PX = 794.0
+        AREA_HEIGHT_PX = 1123.0
+        MARGIN_PX = (50.0, 50.0, 50.0, 50.0)
+        GAP_PX = 20.0
+        MIN_IMAGE_WIDTH_PX = 200.0
+        MIN_IMAGE_HEIGHT_PX = 160.0
 
         for cat, ph_list in self.tpl.image_placeholders.items():
             images = image_sections.get(cat, [])
             if not images:
                 continue
-
-            slot_rect = None
-            slot_page = 0
-            for ph in ph_list:
-                h = ph.area_bottom - ph.area_top
-                if h >= 80:
-                    slot_rect = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
-                    slot_page = ph.page
-                    break
-            if slot_rect is None and ph_list:
+            ph = next((p for p in ph_list if p.area_bottom - p.area_top >= 80), None)
+            if ph is None and ph_list:
                 ph = ph_list[0]
-                slot_rect = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
-                slot_page = ph.page
+            if ph is None:
+                continue
+            area = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
+            try:
+                cols, rows, cell_size_px = compute_image_layout_constraints(
+                    AREA_WIDTH_PX,
+                    AREA_HEIGHT_PX,
+                    min(len(images), 9),
+                    margin_px=MARGIN_PX,
+                    gap_px=GAP_PX,
+                    min_image_width_px=MIN_IMAGE_WIDTH_PX,
+                    min_image_height_px=MIN_IMAGE_HEIGHT_PX,
+                )
+            except ImageLayoutError as exc:
+                logger.error("Falha ao calcular posicionamento de imagens: %s", exc)
+                raise
 
-            title_h = SECTION_TITLE_SIZE + SECTION_TITLE_GAP
-            result = engine.layout_section(
-                images, cat, slot_rect, start_index=idx_counter,
-                overflow_title_height=title_h,
-            )
-            idx_counter += len(result["placed"]) + sum(len(p) for p in result["new_pages"])
+            cell_size = cell_size_px * POINTS_PER_PIXEL
+            min_gap_pt = GAP_PX * POINTS_PER_PIXEL
+            total_w = cols * cell_size + (cols - 1) * min_gap_pt
+            total_h = rows * cell_size + (rows - 1) * min_gap_pt
+            offset_x = area.x0 + (area.width - total_w) / 2
+            offset_y = area.y0 + (area.height - total_h) / 2
 
-            if result["placed"] and slot_rect:
-                draw_images_on_page(doc[slot_page], result["placed"])
-
-            if result["new_pages"]:
-                target_page = slot_rect and slot_page or 0
-                overflow_pages.setdefault(target_page, []).append(
-                    (cat, result["new_pages"])
+            for idx, image in enumerate(images[: cols * rows]):
+                data = image.get("data") or image.get("path")
+                if isinstance(data, str) and os.path.exists(data):
+                    data = Path(data).read_bytes()
+                if not data:
+                    continue
+                col = idx % cols
+                row = idx // cols
+                x = offset_x + col * (cell_size + min_gap_pt)
+                y = offset_y + row * (cell_size + min_gap_pt)
+                placed_all.append(
+                    (
+                        ph.page,
+                        fitz.Rect(x, y, x + cell_size, y + cell_size),
+                        data,
+                        image.get("filename") or "image.jpg",
+                    )
                 )
 
         for cat, images in image_sections.items():
@@ -211,40 +252,72 @@ class TemplateRenderer:
             if not images:
                 continue
             ph_list = self.tpl.image_placeholders.get(cat, [])
-            slot_rect = None
-            slot_page = 0
-            if ph_list:
-                ph = ph_list[0]
-                slot_rect = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
-                slot_page = ph.page
+            ph = next((p for p in ph_list), None)
+            page_index = ph.page if ph else 0
+            if ph:
+                area = fitz.Rect(ph.area_x0, ph.area_top, ph.area_x1, ph.area_bottom)
+            else:
+                area = fitz.Rect(35, 55, 560, 787)
 
-            result = engine.layout_section(
-                images, cat, slot_rect, start_index=idx_counter,
-                overflow_title_height=SECTION_TITLE_SIZE + SECTION_TITLE_GAP,
-            )
-            idx_counter += len(result["placed"]) + sum(len(p) for p in result["new_pages"])
+            try:
+                cols, rows, cell_size_px = compute_image_layout_constraints(
+                    AREA_WIDTH_PX,
+                    AREA_HEIGHT_PX,
+                    min(len(images), 9),
+                    margin_px=MARGIN_PX,
+                    gap_px=GAP_PX,
+                    min_image_width_px=MIN_IMAGE_WIDTH_PX,
+                    min_image_height_px=MIN_IMAGE_HEIGHT_PX,
+                )
+            except ImageLayoutError as exc:
+                logger.error("Falha ao calcular posicionamento de imagens: %s", exc)
+                raise
 
-            if result["placed"] and slot_rect:
-                draw_images_on_page(doc[slot_page], result["placed"])
-            if result["new_pages"]:
-                overflow_pages.setdefault(slot_page or 0, []).append(
-                    (cat, result["new_pages"])
+            cell_size = cell_size_px * POINTS_PER_PIXEL
+            min_gap_pt = GAP_PX * POINTS_PER_PIXEL
+            total_w = cols * cell_size + (cols - 1) * min_gap_pt
+            total_h = rows * cell_size + (rows - 1) * min_gap_pt
+            offset_x = area.x0 + (area.width - total_w) / 2
+            offset_y = area.y0 + (area.height - total_h) / 2
+
+            for idx, image in enumerate(images[: cols * rows]):
+                data = image.get("data") or image.get("path")
+                if isinstance(data, str) and os.path.exists(data):
+                    data = Path(data).read_bytes()
+                if not data:
+                    continue
+                col = idx % cols
+                row = idx // cols
+                x = offset_x + col * (cell_size + min_gap_pt)
+                y = offset_y + row * (cell_size + min_gap_pt)
+                placed_all.append(
+                    (
+                        page_index,
+                        fitz.Rect(x, y, x + cell_size, y + cell_size),
+                        data,
+                        image.get("filename") or "image.jpg",
+                    )
                 )
 
-        overflow_flat: list[tuple[int, str, list]] = []
-        for tpl_pg in sorted(overflow_pages.keys()):
-            for cat, page_groups in overflow_pages[tpl_pg]:
-                for pg in page_groups:
-                    overflow_flat.append((tpl_pg, cat, pg))
+        for page_index, rect, data, filename in placed_all:
+            if page_index >= doc.page_count:
+                continue
+            page = doc[page_index]
+            try:
+                xref = page.insert_image(rect, stream=data, keep_proportion=True)
+                self._lock_image_xref(page, xref, rect)
+            except Exception:
+                page.insert_image(rect, filename="", stream=data, keep_proportion=True)
+            page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
 
-        offset = 0
-        for tpl_pg, cat, placed_group in overflow_flat:
-            section_title = SECTION_LABELS.get(cat, cat.upper())
-            create_image_page(
-                doc, placed_group,
-                section_title=section_title,
-                page_w=PAGE_W, page_h=PAGE_H,
-                margins=(MARGIN_L, MARGIN_T, MARGIN_R, MARGIN_B),
-                position=tpl_pg + 1 + offset,
-            )
-            offset += 1
+    @staticmethod
+    def _lock_image_xref(page: fitz.Page, xref: int, rect: fitz.Rect) -> None:
+        """Place an invisible locked annotation on top of the inserted image."""
+        try:
+            annot = page.add_rect_annot(rect)
+            annot.set_colors(stroke=None, fill=None)
+            annot.set_opacity(0)
+            annot.set_flags(128 | 512)
+            annot.update()
+        except Exception as exc:
+            logger.warning("Could not lock inserted image xref=%s: %s", xref, exc)

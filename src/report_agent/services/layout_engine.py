@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 
-import fitz
+import pymupdf
 
 from .image_layout_engine import GridLayout, ImageLayoutEngine
 from .page_renderer import PageRenderer
@@ -47,7 +47,7 @@ class SectionAnalyzer:
     def anchors(self) -> list[SectionAnchor]:
         raw: list[ImagePlaceholderDef] = [
             placeholder
-            for placeholders in self.template.image_placeholders.values()
+            for placeholders in self.tpl.image_placeholders.values()
             for placeholder in placeholders
         ]
         # Multiple template markers for one category still represent one section.
@@ -84,12 +84,12 @@ class LayoutEngine:
         self.page_renderer = PageRenderer()
         self.tpl = parse_template(template_path)
 
-    def layout_document(self, doc: fitz.Document, fields: dict[str, str], image_sections: dict[str, list[dict]]) -> None:
+    def layout_document(self, doc: pymupdf.Document, fields: dict[str, str], image_sections: dict[str, list[dict]]) -> None:
         self._fill_form_fields(doc, fields)
         self._clear_placeholders(doc)
         self._layout_photos(doc, image_sections)
 
-    def _fill_form_fields(self, doc: fitz.Document, fields: dict[str, str]) -> None:
+    def _fill_form_fields(self, doc: pymupdf.Document, fields: dict[str, str]) -> None:
         aliases = {"company_name": "proprietario", "client_name": "proprietario", "address": "endereco", "classification": "classificacao", "floors": "num_pavimentos", "building_area": "area_total", "process_number": "processo", "report_number": "laudo_exigencias"}
         resolved = {key: str(value).strip() for key, value in fields.items() if value is not None and str(value).strip()}
         for source, target in aliases.items():
@@ -104,7 +104,7 @@ class LayoutEngine:
             if field and field.page < doc.page_count:
                 self.table_renderer.fill_table_cells(doc[field.page], {name: value}, self.tpl.text_fields)
 
-    def _clear_placeholders(self, doc: fitz.Document) -> None:
+    def _clear_placeholders(self, doc: pymupdf.Document) -> None:
         for placeholders in self.tpl.image_placeholders.values():
             for placeholder in placeholders:
                 if placeholder.page >= doc.page_count:
@@ -114,9 +114,9 @@ class LayoutEngine:
                 # instruction itself, leaving all other template text and
                 # artwork intact. Placeholder dimensions are never passed to
                 # the layout solver.
-                page.draw_rect(fitz.Rect(placeholder.insert_rect), color=(1, 1, 1), fill=(1, 1, 1), width=0)
+                page.draw_rect(pymupdf.Rect(placeholder.insert_rect), color=(1, 1, 1), fill=(1, 1, 1), width=0)
 
-    def _layout_photos(self, doc: fitz.Document, image_sections: dict[str, list[dict]]) -> None:
+    def _layout_photos(self, doc: pymupdf.Document, image_sections: dict[str, list[dict]]) -> None:
         anchors = SectionAnalyzer(self.tpl).anchors()
         known = {anchor.category for anchor in anchors}
         # Unknown sections remain deterministic and are appended after known ones.
@@ -138,7 +138,7 @@ class LayoutEngine:
             # but only for a single image.  For multiple images, fall back to
             # flow layout so they can paginate instead of overlapping.
             if ph is not None and ph.insert_rect is not None and len(remaining) == 1:
-                rect = fitz.Rect(*ph.insert_rect)
+                rect = pymupdf.Rect(*ph.insert_rect)
                 page = doc[page_index]
                 img_data = remaining[0].get("data") or remaining[0].get("path")
                 if isinstance(img_data, bytes):
@@ -147,10 +147,10 @@ class LayoutEngine:
                     page.insert_image(rect, filename=img_data, keep_proportion=True)
                 page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
                 caption = f"Figura {figure} – {self._get_category_title(anchor.category)}."
-                caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
+                caption_width = pymupdf.get_text_length(caption, fontname="helv", fontsize=8)
                 caption_y = rect.y1 + 2
                 if caption_y < PAGE_H - MARGIN_B - 14:
-                    page.insert_text(fitz.Point(rect.x0 + (rect.x1 - rect.x0) / 2 - caption_width / 2, caption_y), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
+                    page.insert_text(pymupdf.Point(rect.x0 + (rect.x1 - rect.x0) / 2 - caption_width / 2, caption_y), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
                 figure += 1
                 continue
             
@@ -202,7 +202,7 @@ class LayoutEngine:
                     flow_width = PAGE_W - MARGIN_L - MARGIN_R
                     continuation = True
 
-    def _new_continuation_page(self, doc: fitz.Document, position: int, category: str) -> int:
+    def _new_continuation_page(self, doc: pymupdf.Document, position: int, category: str) -> int:
         source = min(CONTINUATION_TEMPLATE_PAGE, doc.page_count - 1)
         self.page_renderer.duplicate_template_page(doc, source, position)
         page = doc[position]
@@ -210,7 +210,7 @@ class LayoutEngine:
         # conclusions page).  Continuations reserve a clean flow canvas while
         # retaining the template's header and footer artwork.
         page.draw_rect(
-            fitz.Rect(MARGIN_L, MARGIN_T, PAGE_W - MARGIN_R, PAGE_H - MARGIN_B),
+            pymupdf.Rect(MARGIN_L, MARGIN_T, PAGE_W - MARGIN_R, PAGE_H - MARGIN_B),
             color=(1, 1, 1),
             fill=(1, 1, 1),
             width=0,
@@ -219,17 +219,17 @@ class LayoutEngine:
         self.text_renderer.render_title(page, title, MARGIN_L, MARGIN_T)
         return position
 
-    def _render_grid(self, page: fitz.Page, layout: GridLayout, figure: int, category: str) -> None:
+    def _render_grid(self, page: pymupdf.Page, layout: GridLayout, figure: int, category: str) -> None:
         for offset, placement in enumerate(layout.placed):
-            rect = fitz.Rect(*placement.rect_coords)
+            rect = pymupdf.Rect(*placement.rect_coords)
             if isinstance(placement.data, str):
                 page.insert_image(rect, filename=placement.data, keep_proportion=True)
             else:
                 page.insert_image(rect, stream=placement.data, keep_proportion=True)
             page.draw_rect(rect, color=(0.65, 0.65, 0.65), width=0.5)
             caption = f"Figura {figure + offset} – {self._get_category_title(category)}."
-            caption_width = fitz.get_text_length(caption, fontname="helv", fontsize=8)
-            page.insert_text(fitz.Point(placement.caption_point_coords[0] - caption_width / 2, placement.caption_point_coords[1]), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
+            caption_width = pymupdf.get_text_length(caption, fontname="helv", fontsize=8)
+            page.insert_text(pymupdf.Point(placement.caption_point_coords[0] - caption_width / 2, placement.caption_point_coords[1]), caption, fontname="helv", fontsize=8, color=(0.15, 0.15, 0.15))
 
     @staticmethod
     def _get_category_title(category: str) -> str:

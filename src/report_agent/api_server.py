@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 
+import fitz
 import gradio as gr
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -240,13 +241,10 @@ async def generate_report(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     try:
-        from .services.report_generator import ReportGenerator
-        generator = ReportGenerator(template_name=template_name)
-        result = generator.generate(
-            output_path=output_path,
-            fields=fields,
-            image_sections=image_sections,
-        )
+        from .services.preview_renderer import PreviewRenderer
+        preview_renderer = PreviewRenderer(template_name)
+        output_path = preview_renderer.get_final_report_path(fields, image_sections)
+        num_pages = fitz.open(output_path).page_count
     except Exception as e:
         logger.error("Report generation failed: %s", e, exc_info=True)
         return JSONResponse(
@@ -255,16 +253,79 @@ async def generate_report(
         )
 
     if os.path.exists(output_path):
-        return FileResponse(
-            output_path,
-            media_type="application/pdf",
-            filename=output_filename,
+        return JSONResponse(
+            content={
+                "success": True,
+                "output_path": output_path,
+                "num_pages": num_pages,
+                "download_url": f"/download-report?path={output_path}",
+            }
         )
 
     return JSONResponse(
         status_code=500,
         content={"error": "Report file not found after generation"},
     )
+
+
+@app.post("/api/render-preview")
+async def render_preview(
+    extracted_fields: str = Form(...),
+    images: list[UploadFile] = File(default=[]),
+    image_categories: str = Form("{}"),
+    max_pages: int = Form(3),
+):
+    import json
+
+    try:
+        fields = json.loads(extracted_fields)
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid extracted_fields JSON"},
+        )
+
+    try:
+        categories = json.loads(image_categories)
+    except json.JSONDecodeError:
+        categories = {}
+
+    image_sections: dict[str, list[dict]] = {}
+    for img in images:
+        data = await img.read()
+        filename = img.filename or "image.jpg"
+        cat = categories.get(filename, "outro")
+        image_sections.setdefault(cat, []).append({
+            "filename": filename,
+            "data": data,
+        })
+
+    try:
+        from .services.preview_renderer import PreviewRenderer
+        renderer = PreviewRenderer()
+        preview_paths = renderer.render_preview_pages(fields, image_sections, max_pages=max_pages)
+        preview_urls = [f"/preview-image?path={p}" for p in preview_paths]
+        return JSONResponse(content={"success": True, "preview_urls": preview_urls})
+    except Exception as e:
+        logger.error("Preview rendering failed: %s", e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.get("/preview-image")
+async def serve_preview_image(path: str):
+    if not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": "Preview not found"})
+    return FileResponse(path, media_type="image/png")
+
+
+@app.get("/download-report")
+async def download_report(path: str, filename: str = "technical_report.pdf"):
+    if not os.path.exists(path):
+        return JSONResponse(status_code=404, content={"error": "Report not found"})
+    return FileResponse(path, media_type="application/pdf", filename=filename)
 
 
 # ---------------------------------------------------------------------------
@@ -499,14 +560,74 @@ def build_gradio_ui() -> gr.Blocks:
             elem_classes=["generate-btn"],
         )
         gen_status = gr.Textbox(label="Generation Status", interactive=False)
-        gen_output = gr.File(label="Download Report")
+        preview_gallery = gr.Gallery(label="Report Preview", visible=False, columns=1, height=720)
+        preview_actions = gr.Row(visible=False)
+        with preview_actions:
+            approve_btn = gr.Button("Approve & Download", variant="primary")
+            regenerate_btn = gr.Button("Regenerate", variant="secondary")
+        gen_output = gr.File(label="Download Report", visible=False)
+
+        state = gr.State({"approved": False, "preview_urls": [], "path": ""})
+
+        def generate_with_preview(*inputs):
+            status, out_path = handle_generate(*inputs)
+            if not out_path or not isinstance(out_path, str) or not os.path.exists(out_path):
+                return (
+                    status,
+                    gr.update(value=None, visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    {"approved": False, "preview_urls": [], "path": ""},
+                )
+            from urllib.parse import quote
+            download_url = f"/download-report?path={quote(out_path)}&filename=technical_report.pdf"
+            doc = fitz.open(out_path)
+            pages = []
+            preview_dir = os.path.join(tempfile.gettempdir(), "report-agent", "previews")
+            os.makedirs(preview_dir, exist_ok=True)
+            for i in range(len(doc)):
+                pix = doc[i].get_pixmap(dpi=150)
+                path = os.path.join(preview_dir, f"preview_{i}.png")
+                pix.save(path)
+                pages.append(path)
+            doc.close()
+            return (
+                status,
+                gr.update(value=pages, visible=True),
+                gr.update(visible=True),
+                download_url,
+                {"approved": False, "preview_urls": pages, "path": out_path},
+            )
+
+        def approve_download(state):
+            path = state.get("path", "") if isinstance(state, dict) else ""
+            if not path or not os.path.exists(path):
+                return (
+                    "Report not found. Please generate again.",
+                    gr.update(value=None, visible=False),
+                    gr.update(visible=False),
+                    gr.update(visible=False),
+                    {"approved": False, "preview_urls": [], "path": ""},
+                )
+            return (
+                "Report approved. Use the file component below to download.",
+                gr.update(value=None, visible=False),
+                gr.update(visible=False),
+                path,
+                {"approved": True, "preview_urls": [], "path": path},
+            )
 
         all_inputs = [pdf_upload] + textbox_list + file_list
 
         generate_btn.click(
-            fn=handle_generate,
+            fn=generate_with_preview,
             inputs=all_inputs,
-            outputs=[gen_status, gen_output],
+            outputs=[gen_status, preview_gallery, preview_actions, gen_output, state],
+        )
+        approve_btn.click(
+            fn=approve_download,
+            inputs=[state],
+            outputs=[gen_status, preview_gallery, preview_actions, gen_output, state],
         )
 
     return ui
